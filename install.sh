@@ -14,6 +14,12 @@ info()  { echo -e "${GREEN}✓${NC} $1"; }
 warn()  { echo -e "${YELLOW}!${NC} $1"; }
 error() { echo -e "${RED}✗${NC} $1" >&2; }
 
+# --- git 설치 확인 ---
+if ! command -v git &>/dev/null; then
+  error "git이 설치되어 있지 않습니다. git을 먼저 설치해주세요."
+  exit 1
+fi
+
 # --- git root 감지 ---
 GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 if [[ -z "$GIT_ROOT" ]]; then
@@ -34,7 +40,11 @@ if [[ -d "$SKILL_DIR" ]]; then
 fi
 
 mkdir -p .claude/skills
-git clone --depth 1 https://github.com/kwo2002/context-bridge.git "$SKILL_DIR" 2>/dev/null
+if ! git clone --depth 1 https://github.com/kwo2002/context-bridge.git "$SKILL_DIR"; then
+  error "Skill 저장소 클론에 실패했습니다. 네트워크 연결을 확인해주세요."
+  rm -rf "$SKILL_DIR"
+  exit 1
+fi
 rm -rf "$SKILL_DIR/.git"
 rm -f "$SKILL_DIR/install.sh"
 
@@ -48,7 +58,6 @@ if [[ ! -f "$SETTINGS_FILE" ]]; then
   mv "$HOOKS_SOURCE" "$SETTINGS_FILE"
   info "hooks 설정 생성 → $SETTINGS_FILE"
 else
-  rm -f "$HOOKS_SOURCE"
   warn "기존 $SETTINGS_FILE 이 있습니다. hooks를 수동으로 추가해주세요."
   echo ""
   echo "  $SETTINGS_FILE 을 열고, \"hooks\" 객체 안에 아래 3개 이벤트를 추가하세요."
@@ -75,6 +84,7 @@ else
   echo "        \"TaskCompleted\": [ ... ]"
   echo "      }"
   echo "    }"
+  rm -f "$HOOKS_SOURCE"
 fi
 
 # --- 3. .gitignore 업데이트 ---
@@ -112,7 +122,7 @@ fi
 # --- 완료 안내 ---
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-info "설치 완료~"
+info "설치 완료!"
 echo ""
 echo "  다음 단계:"
 echo "  1. Context Bridge 프로젝트 설정 - API 키 관리 에서 API 키를 생성하세요"
