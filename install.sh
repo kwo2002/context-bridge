@@ -37,9 +37,47 @@ mkdir -p .claude/skills
 git clone --depth 1 https://github.com/kwo2002/context-bridge.git "$SKILL_DIR" 2>/dev/null
 rm -rf "$SKILL_DIR/.git"
 rm -f "$SKILL_DIR/install.sh"
+
 info "Skill 설치 완료 → $SKILL_DIR"
 
-# --- 2. .gitignore 업데이트 ---
+# --- 2. settings.json (hooks) 설치 ---
+SETTINGS_FILE=".claude/settings.json"
+HOOKS_SOURCE="$SKILL_DIR/settings.json"
+
+if [[ ! -f "$SETTINGS_FILE" ]]; then
+  mv "$HOOKS_SOURCE" "$SETTINGS_FILE"
+  info "hooks 설정 생성 → $SETTINGS_FILE"
+else
+  rm -f "$HOOKS_SOURCE"
+  warn "기존 $SETTINGS_FILE 이 있습니다. hooks를 수동으로 추가해주세요."
+  echo ""
+  echo "  $SETTINGS_FILE 을 열고, \"hooks\" 객체 안에 아래 3개 이벤트를 추가하세요."
+  echo "  이미 \"hooks\" 키가 없다면 최상위에 \"hooks\": { ... } 를 만들어주세요."
+  echo ""
+  echo "  추가할 내용은 아래 파일에 있습니다:"
+  echo "    cat $HOOKS_SOURCE"
+  echo ""
+  echo "  예시) 기존 settings.json 이 아래와 같다면:"
+  echo "    {"
+  echo "      \"permissions\": { ... },"
+  echo "      \"hooks\": {"
+  echo "        \"PreToolUse\": [ ... ]    ← 기존 hooks"
+  echo "      }"
+  echo "    }"
+  echo ""
+  echo "  \"hooks\" 안에 UserPromptSubmit, TaskCreated, TaskCompleted 를 추가하세요:"
+  echo "    {"
+  echo "      \"permissions\": { ... },"
+  echo "      \"hooks\": {"
+  echo "        \"PreToolUse\": [ ... ],   ← 기존 hooks"
+  echo "        \"UserPromptSubmit\": [ ... ],"
+  echo "        \"TaskCreated\": [ ... ],"
+  echo "        \"TaskCompleted\": [ ... ]"
+  echo "      }"
+  echo "    }"
+fi
+
+# --- 3. .gitignore 업데이트 ---
 touch .gitignore
 
 if ! grep -qx 'context-bridge.yml' .gitignore 2>/dev/null; then
@@ -56,7 +94,7 @@ else
   info ".gitignore에 .context-capture/ 이미 존재"
 fi
 
-# --- 3. CLAUDE.md 업데이트 ---
+# --- 4. CLAUDE.md 업데이트 ---
 CLAUDE_MD="CLAUDE.md"
 DIRECTIVE="git commit 후 반드시 context-capture skill을 실행하라."
 
