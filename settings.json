@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); PROMPT=$(echo \"$INPUT\" | jq -r '.prompt'); CPID=$PPID; DIR=\".context-capture\"; mkdir -p \"$DIR\"; FILE=\"${DIR}/.claude-user-prompt-${CPID}.txt\"; MARKER=\"${DIR}/.claude-captured-${CPID}\"; if [ -f \"$MARKER\" ] || [ ! -f \"$FILE\" ]; then printf '%s\\n%s' \"$(uuidgen)\" \"$PROMPT\" > \"$FILE\"; rm -f \"$MARKER\"; else printf '\\n%s' \"$PROMPT\" >> \"$FILE\"; fi"
+          }
+        ]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); TASK_ID=$(echo \"$INPUT\" | jq -r '.task_id // empty'); TASK_TITLE=$(echo \"$INPUT\" | jq -r '.task_subject // empty'); TASK_DESC=$(echo \"$INPUT\" | jq -r '.task_description // empty'); if [ -z \"$TASK_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/context-bridge.yml\"; if [ ! -f \"$CFG\" ]; then exit 0; fi; API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); CPID=$PPID; PROMPT_FILE=\"$GIT_ROOT/.context-capture/.claude-user-prompt-${CPID}.txt\"; if [ ! -f \"$PROMPT_FILE\" ]; then exit 0; fi; REQ_ID=$(head -1 \"$PROMPT_FILE\"); curl -s --connect-timeout 5 -X POST \"http://${ENDPOINT}/api/v1/captures/tasks\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d \"{\\\"externalTaskId\\\":\\\"${TASK_ID}\\\",\\\"externalRequestId\\\":\\\"${REQ_ID}\\\",\\\"title\\\":$(echo \"$TASK_TITLE\" | jq -Rs .),\\\"description\\\":$(echo \"$TASK_DESC\" | jq -Rs .)}\" > /dev/null 2>&1; exit 0"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); TASK_ID=$(echo \"$INPUT\" | jq -r '.task_id // empty'); if [ -z \"$TASK_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/context-bridge.yml\"; if [ ! -f \"$CFG\" ]; then exit 0; fi; API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X PATCH \"http://${ENDPOINT}/api/v1/captures/tasks/${TASK_ID}\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d '{\"status\":\"COMPLETED\"}' > /dev/null 2>&1; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
