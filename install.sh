@@ -65,7 +65,7 @@ if [[ ! -f "$SETTINGS_FILE" ]]; then
     sed -i.bak '$ d' "$SETTINGS_FILE"
     printf '  ,"mcpServers": {\n    "context-bridge": {\n      "command": "node",\n      "args": ["%s"]\n    }\n  }\n}\n' "$MCP_NODE_PATH" >> "$SETTINGS_FILE"
     rm -f "${SETTINGS_FILE}.bak"
-    info "MCP Server config added to $SETTINGS_FILE"
+    info "!!MCP Server config added to $SETTINGS_FILE"
   fi
 else
   warn "Existing $SETTINGS_FILE found. Please add hooks manually."

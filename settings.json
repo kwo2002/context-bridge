@@ -1,12 +1,58 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); if [ -z \"$SESSION_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/context-bridge.yml\"; if [ ! -f \"$CFG\" ]; then exit 0; fi; API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X POST \"${ENDPOINT}/api/v1/work-sessions\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d \"{\\\"claudeSessionId\\\":\\\"${SESSION_ID}\\\",\\\"agentType\\\":\\\"CLAUDE_CODE\\\"}\" > /dev/null 2>&1; exit 0",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(*git commit*)",
+            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/context-bridge.yml\"; if [ -f \"$CFG\" ] && [ -n \"$SESSION_ID\" ]; then API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); PROMPT_FILE=\"${GIT_ROOT}/.context-capture/.claude-prompts-${SESSION_ID}\"; OFFSET_FILE=\"${GIT_ROOT}/.context-capture/.claude-offset-${SESSION_ID}\"; if [ -f \"$PROMPT_FILE\" ]; then CONTENT=$(cat \"$PROMPT_FILE\" | jq -Rs .); curl -s --connect-timeout 5 -X PUT \"${ENDPOINT}/api/v1/work-sessions/prompt\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d \"{\\\"claudeSessionId\\\":\\\"${SESSION_ID}\\\",\\\"content\\\":${CONTENT}}\" > /dev/null 2>&1; LAST_INDEX=0; if [ -f \"$OFFSET_FILE\" ]; then LAST_INDEX=$(cat \"$OFFSET_FILE\"); fi; TOTAL_LINES=$(wc -l < \"$PROMPT_FILE\" | tr -d ' '); if [ \"$TOTAL_LINES\" -gt \"$LAST_INDEX\" ]; then DELTA=$(tail -n +$((LAST_INDEX + 1)) \"$PROMPT_FILE\"); printf '%s' \"$DELTA\" > \"${GIT_ROOT}/.context-capture/.claude-conversation-delta-${SESSION_ID}\"; fi; printf '%s' \"$TOTAL_LINES\" > \"$OFFSET_FILE\"; fi; fi; if [ -d \"$GIT_ROOT/.claude/skills/context-capture\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"git commit completed. You must invoke the context-capture skill to capture the work context.\"}}'; fi"
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); PROMPT=$(echo \"$INPUT\" | jq -r '.prompt'); CPID=$PPID; DIR=\".context-capture\"; mkdir -p \"$DIR\"; FILE=\"${DIR}/.claude-user-prompt-${CPID}.txt\"; MARKER=\"${DIR}/.claude-captured-${CPID}\"; if [ -f \"$MARKER\" ] || [ ! -f \"$FILE\" ]; then printf '%s\\n%s' \"$(uuidgen)\" \"$PROMPT\" > \"$FILE\"; rm -f \"$MARKER\"; else printf '\\n%s' \"$PROMPT\" >> \"$FILE\"; fi"
+            "command": "INPUT=$(cat); PROMPT=$(printf '%s' \"$INPUT\" | jq -r '.prompt // empty'); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); if [ -z \"$SESSION_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); DIR=\"${GIT_ROOT}/.context-capture\"; mkdir -p \"$DIR\"; FILE=\"${DIR}/.claude-prompts-${SESSION_ID}\"; printf '%s\\n' \"{\\\"role\\\":\\\"user\\\",\\\"content\\\":$(printf '%s' \"$PROMPT\" | jq -Rs .)}\" >> \"$FILE\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); STOP_ACTIVE=$(printf '%s' \"$INPUT\" | jq -r '.stop_hook_active // false'); if [ \"$STOP_ACTIVE\" = \"true\" ]; then exit 0; fi; SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); LAST_MSG=$(printf '%s' \"$INPUT\" | jq -r '.last_assistant_message // empty'); if [ -z \"$SESSION_ID\" ] || [ -z \"$LAST_MSG\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); DIR=\"${GIT_ROOT}/.context-capture\"; mkdir -p \"$DIR\"; FILE=\"${DIR}/.claude-prompts-${SESSION_ID}\"; printf '%s\\n' \"{\\\"role\\\":\\\"assistant\\\",\\\"content\\\":$(printf '%s' \"$LAST_MSG\" | jq -Rs .)}\" >> \"$FILE\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -n \"$SESSION_ID\" ]; then rm -f \"${GIT_ROOT}/.context-capture/.claude-prompts-${SESSION_ID}\"; rm -f \"${GIT_ROOT}/.context-capture/.claude-offset-${SESSION_ID}\"; rm -f \"${GIT_ROOT}/.context-capture/.claude-conversation-delta-${SESSION_ID}\"; CFG=\"$GIT_ROOT/context-bridge.yml\"; if [ -f \"$CFG\" ]; then API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X DELETE \"${ENDPOINT}/api/v1/work-sessions/${SESSION_ID}\" -H \"X-API-Key: ${API_KEY}\" > /dev/null 2>&1; fi; fi"
           }
         ]
       }
@@ -17,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); TASK_ID=$(echo \"$INPUT\" | jq -r '.task_id // empty'); TASK_TITLE=$(echo \"$INPUT\" | jq -r '.task_subject // empty'); TASK_DESC=$(echo \"$INPUT\" | jq -r '.task_description // empty'); if [ -z \"$TASK_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/context-bridge.yml\"; if [ ! -f \"$CFG\" ]; then exit 0; fi; API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); CPID=$PPID; PROMPT_FILE=\"$GIT_ROOT/.context-capture/.claude-user-prompt-${CPID}.txt\"; if [ ! -f \"$PROMPT_FILE\" ]; then exit 0; fi; REQ_ID=$(head -1 \"$PROMPT_FILE\"); curl -s --connect-timeout 5 -X POST \"http://${ENDPOINT}/api/v1/captures/tasks\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d \"{\\\"externalTaskId\\\":\\\"${TASK_ID}\\\",\\\"externalRequestId\\\":\\\"${REQ_ID}\\\",\\\"title\\\":$(echo \"$TASK_TITLE\" | jq -Rs .),\\\"description\\\":$(echo \"$TASK_DESC\" | jq -Rs .)}\" > /dev/null 2>&1; exit 0"
+            "command": "INPUT=$(cat); TASK_ID=$(printf '%s' \"$INPUT\" | jq -r '.task_id // empty'); TASK_TITLE=$(printf '%s' \"$INPUT\" | jq -r '.task_subject // empty'); TASK_DESC=$(printf '%s' \"$INPUT\" | jq -r '.task_description // empty'); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); if [ -z \"$TASK_ID\" ] || [ -z \"$SESSION_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/context-bridge.yml\"; if [ ! -f \"$CFG\" ]; then exit 0; fi; API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X POST \"${ENDPOINT}/api/v1/captures/tasks\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d \"{\\\"externalTaskId\\\":\\\"${TASK_ID}\\\",\\\"claudeSessionId\\\":\\\"${SESSION_ID}\\\",\\\"title\\\":$(echo \"$TASK_TITLE\" | jq -Rs .),\\\"description\\\":$(echo \"$TASK_DESC\" | jq -Rs .)}\" > /dev/null 2>&1; exit 0"
           }
         ]
       }
@@ -28,10 +74,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); TASK_ID=$(echo \"$INPUT\" | jq -r '.task_id // empty'); if [ -z \"$TASK_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/context-bridge.yml\"; if [ ! -f \"$CFG\" ]; then exit 0; fi; API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X PATCH \"http://${ENDPOINT}/api/v1/captures/tasks/${TASK_ID}\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d '{\"status\":\"COMPLETED\"}' > /dev/null 2>&1; exit 0"
+            "command": "INPUT=$(cat); TASK_ID=$(printf '%s' \"$INPUT\" | jq -r '.task_id // empty'); if [ -z \"$TASK_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/context-bridge.yml\"; if [ ! -f \"$CFG\" ]; then exit 0; fi; API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X PATCH \"${ENDPOINT}/api/v1/captures/tasks/${TASK_ID}\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d '{\"status\":\"COMPLETED\"}' > /dev/null 2>&1; exit 0"
           }
         ]
       }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
