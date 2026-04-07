@@ -56,7 +56,7 @@ HOOKS_SOURCE="$SKILL_DIR/settings.json"
 
 if [[ ! -f "$SETTINGS_FILE" ]]; then
   mv "$HOOKS_SOURCE" "$SETTINGS_FILE"
-  info "Hooks config created → $SETTINGS_FILE (hooks + mcpServers)"
+  info "Hooks config created → $SETTINGS_FILE"
 else
   warn "Existing $SETTINGS_FILE found. Please add hooks manually."
   echo ""
@@ -96,6 +96,19 @@ MCP_DIR="$SKILL_DIR/mcp-server"
 if [[ -d "$MCP_DIR" ]] && command -v npm &>/dev/null; then
   (cd "$MCP_DIR" && npm install --production --silent 2>/dev/null) || true
   info "MCP Server ready → $MCP_DIR"
+fi
+
+# --- 2.6. Create .mcp.json ---
+MCP_JSON=".mcp.json"
+if [[ ! -f "$MCP_JSON" ]]; then
+  printf '{\n  "mcpServers": {\n    "context-bridge": {\n      "command": "node",\n      "args": [".claude/skills/context-capture/mcp-server/dist/index.js"]\n    }\n  }\n}\n' > "$MCP_JSON"
+  info "MCP config created → $MCP_JSON"
+else
+  if ! grep -q 'context-bridge' "$MCP_JSON" 2>/dev/null; then
+    warn "Existing $MCP_JSON found. Please add context-bridge MCP server manually."
+  else
+    info "context-bridge already configured in $MCP_JSON"
+  fi
 fi
 
 # --- 3. Update .gitignore ---

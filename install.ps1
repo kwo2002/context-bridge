@@ -130,12 +130,6 @@ $HooksContent = @'
         ]
       }
     ]
-  },
-  "mcpServers": {
-    "context-bridge": {
-      "command": "node",
-      "args": [".claude/skills/context-capture/mcp-server/dist/index.js"]
-    }
   }
 }
 '@
@@ -150,20 +144,36 @@ if (-not (Test-Path $SettingsFile)) {
     Write-Host "  Or re-run this installer after removing the existing file."
 }
 
-# --- 2.5. Build MCP Server ---
-if (Get-Command npm -ErrorAction SilentlyContinue) {
-    $McpDir = Join-Path $SkillDir "mcp-server"
-    if (Test-Path $McpDir) {
-        Push-Location $McpDir
-        npm install --production --silent 2>$null
-        npm run build --silent 2>$null
-        Pop-Location
-        Write-Info "MCP Server built -> $McpDir"
-    } else {
-        Write-Warn "MCP Server directory not found: $McpDir"
+# --- 2.5. Install MCP Server dependencies ---
+$McpDir = Join-Path $SkillDir "mcp-server"
+if ((Test-Path $McpDir) -and (Get-Command npm -ErrorAction SilentlyContinue)) {
+    Push-Location $McpDir
+    try { npm install --production --silent 2>$null } catch {}
+    Pop-Location
+    Write-Info "MCP Server ready -> $McpDir"
+}
+
+# --- 2.6. Create .mcp.json ---
+$McpJson = ".mcp.json"
+if (-not (Test-Path $McpJson)) {
+    $McpJsonContent = @'
+{
+  "mcpServers": {
+    "context-bridge": {
+      "command": "node",
+      "args": [".claude/skills/context-capture/mcp-server/dist/index.js"]
     }
+  }
+}
+'@
+    Set-Content -Path $McpJson -Value $McpJsonContent -Encoding UTF8
+    Write-Info "MCP config created -> $McpJson"
 } else {
-    Write-Warn "npm not found. MCP Server not installed. Install Node.js for MCP support."
+    if (-not (Select-String -Path $McpJson -Pattern "context-bridge" -Quiet)) {
+        Write-Warn "Existing $McpJson found. Please add context-bridge MCP server manually."
+    } else {
+        Write-Info "context-bridge already configured in $McpJson"
+    }
 }
 
 # --- 3. Update .gitignore ---
