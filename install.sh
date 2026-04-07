@@ -56,17 +56,7 @@ HOOKS_SOURCE="$SKILL_DIR/settings.json"
 
 if [[ ! -f "$SETTINGS_FILE" ]]; then
   mv "$HOOKS_SOURCE" "$SETTINGS_FILE"
-  info "Hooks config created → $SETTINGS_FILE"
-
-  # Add mcpServers config to settings.local.json
-  if ! grep -q 'mcpServers' "$SETTINGS_FILE" 2>/dev/null; then
-    MCP_NODE_PATH=".claude/skills/context-capture/mcp-server/dist/index.js"
-    # Remove last } and append mcpServers block using printf (heredoc unsafe with curl|bash)
-    sed -i.bak '$ d' "$SETTINGS_FILE"
-    printf '  ,"mcpServers": {\n    "context-bridge": {\n      "command": "node",\n      "args": ["%s"]\n    }\n  }\n}\n' "$MCP_NODE_PATH" >> "$SETTINGS_FILE"
-    rm -f "${SETTINGS_FILE}.bak"
-    info "!!MCP Server config added to $SETTINGS_FILE"
-  fi
+  info "Hooks config created → $SETTINGS_FILE (hooks + mcpServers)"
 else
   warn "Existing $SETTINGS_FILE found. Please add hooks manually."
   echo ""

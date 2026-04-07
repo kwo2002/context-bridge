@@ -85,5 +85,11 @@
       "Bash(git add:*)",
       "Bash(git commit:*)"
     ]
+  },
+  "mcpServers": {
+    "context-bridge": {
+      "command": "node",
+      "args": [".claude/skills/context-capture/mcp-server/dist/index.js"]
+    }
   }
 }
