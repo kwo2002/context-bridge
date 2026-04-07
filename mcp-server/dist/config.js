@@ -9,7 +9,7 @@ export function loadConfig() {
     catch {
         return null;
     }
-    const configPath = join(gitRoot, "context-bridge.yml");
+    const configPath = join(gitRoot, "aiflare.yml");
     if (!existsSync(configPath)) {
         return null;
     }
@@ -26,8 +26,8 @@ export function loadConfig() {
             endpoint = endpointMatch[1].trim().replace(/^["']|["']$/g, "");
         }
     }
-    if (!apiKey || !endpoint) {
+    if (!apiKey) {
         return null;
     }
-    return { apiKey, endpoint };
+    return { apiKey, endpoint: endpoint || "https://api.aiflare.dev" };
 }

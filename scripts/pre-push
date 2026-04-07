@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
-# Context Bridge: push된 커밋의 타임라인 엔트리를 PUSHED 상태로 전환
+# AIFlare: push된 커밋의 타임라인 엔트리를 PUSHED 상태로 전환
 # 실패해도 push를 차단하지 않음
 
 set -uo pipefail
 
 GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
-CONFIG_FILE="${GIT_ROOT}/context-bridge.yml"
+CONFIG_FILE="${GIT_ROOT}/aiflare.yml"
 
-# context-bridge.yml이 없으면 조용히 종료
+# aiflare.yml이 없으면 조용히 종료
 if [[ ! -f "$CONFIG_FILE" ]]; then
   exit 0
 fi
 
 # 설정 읽기
 ENDPOINT="$(grep -E '^endpoint:' "$CONFIG_FILE" | sed 's/^endpoint:[[:space:]]*//' | tr -d '"' | tr -d "'")"
+ENDPOINT="${ENDPOINT:-https://api.aiflare.dev}"
 API_KEY="$(grep -E '^api_key:' "$CONFIG_FILE" | sed 's/^api_key:[[:space:]]*//' | tr -d '"' | tr -d "'")"
 
-if [[ -z "$ENDPOINT" || -z "$API_KEY" ]]; then
+if [[ -z "$API_KEY" ]]; then
   exit 0
 fi
 

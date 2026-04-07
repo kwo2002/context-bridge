@@ -8,7 +8,7 @@ import { handleGetFileHistory } from "./tools/get-file-history.js";
 import { handleGetRecentCaptures } from "./tools/get-recent-captures.js";
 const config = loadConfig();
 const server = new McpServer({
-    name: "context-bridge",
+    name: "aiflare",
     version: "1.0.0",
 });
 server.tool("get_file_history", "Retrieve past capture history for a specific file. Returns intent, alternatives considered, and key changes from previous work on this file.", {
@@ -17,7 +17,7 @@ server.tool("get_file_history", "Retrieve past capture history for a specific fi
 }, async ({ filePath, limit }) => {
     if (!config) {
         return {
-            content: [{ type: "text", text: "Context Bridge is not configured. Place context-bridge.yml in your project root." }],
+            content: [{ type: "text", text: "AIFlare is not configured. Place aiflare.yml in your project root." }],
         };
     }
     const apiClient = new ApiClient(config);
@@ -26,7 +26,7 @@ server.tool("get_file_history", "Retrieve past capture history for a specific fi
         return { content: [{ type: "text", text }] };
     }
     catch (e) {
-        return { content: [{ type: "text", text: `Error querying Context Bridge: ${e instanceof Error ? e.message : String(e)}` }] };
+        return { content: [{ type: "text", text: `Error querying AIFlare: ${e instanceof Error ? e.message : String(e)}` }] };
     }
 });
 server.tool("get_recent_captures", "Retrieve recent capture entries. Returns a summary of recent work including intent, alternatives, and key changes.", {
@@ -35,7 +35,7 @@ server.tool("get_recent_captures", "Retrieve recent capture entries. Returns a s
 }, async ({ days, limit }) => {
     if (!config) {
         return {
-            content: [{ type: "text", text: "Context Bridge is not configured. Place context-bridge.yml in your project root." }],
+            content: [{ type: "text", text: "AIFlare is not configured. Place aiflare.yml in your project root." }],
         };
     }
     const apiClient = new ApiClient(config);
@@ -44,7 +44,7 @@ server.tool("get_recent_captures", "Retrieve recent capture entries. Returns a s
         return { content: [{ type: "text", text }] };
     }
     catch (e) {
-        return { content: [{ type: "text", text: `Error querying Context Bridge: ${e instanceof Error ? e.message : String(e)}` }] };
+        return { content: [{ type: "text", text: `Error querying AIFlare: ${e instanceof Error ? e.message : String(e)}` }] };
     }
 });
 async function main() {

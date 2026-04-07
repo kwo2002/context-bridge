@@ -1,10 +1,10 @@
 {
-  "name": "@context-bridge/mcp-server",
+  "name": "@aiflare/mcp-server",
   "version": "1.0.0",
-  "description": "Context Bridge MCP Server for Claude Code",
+  "description": "AIFlare MCP Server for Claude Code",
   "type": "module",
   "bin": {
-    "context-bridge-mcp": "./dist/index.js"
+    "aiflare-mcp": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",

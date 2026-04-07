@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Context Bridge one-command install script
+# AIFlare one-command install script
 # Usage: curl -fsSL https://raw.githubusercontent.com/kwo2002/context-bridge/main/install.sh | bash
 
 set -euo pipefail
@@ -29,7 +29,7 @@ fi
 
 cd "$GIT_ROOT"
 echo ""
-echo "Starting Context Bridge installation..."
+echo "Starting AIFlare installation..."
 echo ""
 
 # --- 1. Install Skill ---
@@ -101,24 +101,24 @@ fi
 # --- 2.6. Create .mcp.json ---
 MCP_JSON=".mcp.json"
 if [[ ! -f "$MCP_JSON" ]]; then
-  printf '{\n  "mcpServers": {\n    "context-bridge": {\n      "command": "node",\n      "args": [".claude/skills/context-capture/mcp-server/dist/index.js"]\n    }\n  }\n}\n' > "$MCP_JSON"
+  printf '{\n  "mcpServers": {\n    "aiflare": {\n      "command": "node",\n      "args": [".claude/skills/context-capture/mcp-server/dist/index.js"]\n    }\n  }\n}\n' > "$MCP_JSON"
   info "MCP config created → $MCP_JSON"
 else
-  if ! grep -q 'context-bridge' "$MCP_JSON" 2>/dev/null; then
-    warn "Existing $MCP_JSON found. Please add context-bridge MCP server manually."
+  if ! grep -q 'aiflare' "$MCP_JSON" 2>/dev/null; then
+    warn "Existing $MCP_JSON found. Please add aiflare MCP server manually."
   else
-    info "context-bridge already configured in $MCP_JSON"
+    info "aiflare already configured in $MCP_JSON"
   fi
 fi
 
 # --- 3. Update .gitignore ---
 touch .gitignore
 
-if ! grep -qx 'context-bridge.yml' .gitignore 2>/dev/null; then
-  echo 'context-bridge.yml' >> .gitignore
-  info "Added context-bridge.yml to .gitignore"
+if ! grep -qx 'aiflare.yml' .gitignore 2>/dev/null; then
+  echo 'aiflare.yml' >> .gitignore
+  info "Added aiflare.yml to .gitignore"
 else
-  info "context-bridge.yml already in .gitignore"
+  info "aiflare.yml already in .gitignore"
 fi
 
 if ! grep -qx '.context-capture/' .gitignore 2>/dev/null; then
@@ -174,7 +174,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 info "Installation complete!"
 echo ""
 echo "  Next steps:"
-echo "  1. Go to Context Bridge project settings → API Key Management and generate an API key"
-echo "  2. Place the downloaded context-bridge.yml in the project root"
+echo "  1. Go to AIFlare project settings → API Key Management and generate an API key"
+echo "  2. Place the downloaded aiflare.yml in the project root"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -1,4 +1,4 @@
-# Context Bridge Capture Script (PowerShell)
+# AIFlare Capture Script (PowerShell)
 # capture.sh PowerShell version
 #
 # Usage:
@@ -24,13 +24,13 @@ $ErrorActionPreference = "Stop"
 # --- Find config file (relative to git root) ---
 $GitRoot = git rev-parse --show-toplevel 2>$null
 if (-not $GitRoot) {
-    Write-Host "Context Bridge capture skipped: not a git repository."
+    Write-Host "AIFlare capture skipped: not a git repository."
     exit 0
 }
 
-$ConfigFile = Join-Path $GitRoot "context-bridge.yml"
+$ConfigFile = Join-Path $GitRoot "aiflare.yml"
 if (-not (Test-Path $ConfigFile)) {
-    Write-Host "Context Bridge capture skipped: context-bridge.yml not found."
+    Write-Host "AIFlare capture skipped: aiflare.yml not found."
     exit 0
 }
 
@@ -46,8 +46,10 @@ foreach ($line in (Get-Content $ConfigFile)) {
     }
 }
 
-if (-not $ApiKey -or -not $Endpoint) {
-    Write-Host "Context Bridge capture skipped: api_key or endpoint missing in context-bridge.yml."
+if (-not $Endpoint) { $Endpoint = "https://api.aiflare.dev" }
+
+if (-not $ApiKey) {
+    Write-Host "AIFlare capture skipped: api_key missing in aiflare.yml."
     exit 0
 }
 
@@ -107,14 +109,14 @@ $Headers = @{
 
 try {
     $Response = Invoke-RestMethod -Uri "$Endpoint/api/v1/captures" -Method Post -Headers $Headers -Body $JsonBody -ErrorAction Stop
-    Write-Host "Context Bridge capture complete: $Title"
+    Write-Host "AIFlare capture complete: $Title"
 } catch {
     $StatusCode = $_.Exception.Response.StatusCode.value__
     switch ($StatusCode) {
-        400 { Write-Host "Context Bridge capture failed: invalid request data" }
-        401 { Write-Host "Context Bridge capture failed: API Key is invalid." }
-        404 { Write-Host "Context Bridge capture failed: no project found for this API Key." }
-        429 { Write-Host "Context Bridge capture failed: rate limit exceeded. Please try again later." }
-        default { Write-Host "Context Bridge capture failed: HTTP $StatusCode — server error. Please retry manually later." }
+        400 { Write-Host "AIFlare capture failed: invalid request data" }
+        401 { Write-Host "AIFlare capture failed: API Key is invalid." }
+        404 { Write-Host "AIFlare capture failed: no project found for this API Key." }
+        429 { Write-Host "AIFlare capture failed: rate limit exceeded. Please try again later." }
+        default { Write-Host "AIFlare capture failed: HTTP $StatusCode — server error. Please retry manually later." }
     }
 }

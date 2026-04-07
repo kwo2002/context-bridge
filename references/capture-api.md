@@ -1,4 +1,4 @@
-# Context Bridge Capture API Reference
+# AIFlare Capture API Reference
 
 ## Authentication
 

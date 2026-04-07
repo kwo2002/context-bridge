@@ -11,7 +11,7 @@ import { handleGetRecentCaptures } from "./tools/get-recent-captures.js";
 const config = loadConfig();
 
 const server = new McpServer({
-  name: "context-bridge",
+  name: "aiflare",
   version: "1.0.0",
 });
 
@@ -25,7 +25,7 @@ server.tool(
   async ({ filePath, limit }) => {
     if (!config) {
       return {
-        content: [{ type: "text" as const, text: "Context Bridge is not configured. Place context-bridge.yml in your project root." }],
+        content: [{ type: "text" as const, text: "AIFlare is not configured. Place aiflare.yml in your project root." }],
       };
     }
     const apiClient = new ApiClient(config);
@@ -33,7 +33,7 @@ server.tool(
       const text = await handleGetFileHistory(apiClient, { filePath, limit });
       return { content: [{ type: "text" as const, text }] };
     } catch (e) {
-      return { content: [{ type: "text" as const, text: `Error querying Context Bridge: ${e instanceof Error ? e.message : String(e)}` }] };
+      return { content: [{ type: "text" as const, text: `Error querying AIFlare: ${e instanceof Error ? e.message : String(e)}` }] };
     }
   }
 );
@@ -48,7 +48,7 @@ server.tool(
   async ({ days, limit }) => {
     if (!config) {
       return {
-        content: [{ type: "text" as const, text: "Context Bridge is not configured. Place context-bridge.yml in your project root." }],
+        content: [{ type: "text" as const, text: "AIFlare is not configured. Place aiflare.yml in your project root." }],
       };
     }
     const apiClient = new ApiClient(config);
@@ -56,7 +56,7 @@ server.tool(
       const text = await handleGetRecentCaptures(apiClient, { days, limit });
       return { content: [{ type: "text" as const, text }] };
     } catch (e) {
-      return { content: [{ type: "text" as const, text: `Error querying Context Bridge: ${e instanceof Error ? e.message : String(e)}` }] };
+      return { content: [{ type: "text" as const, text: `Error querying AIFlare: ${e instanceof Error ? e.message : String(e)}` }] };
     }
   }
 );

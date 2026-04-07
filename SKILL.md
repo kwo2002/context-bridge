@@ -2,7 +2,7 @@
 name: context-capture
 description: >
   Whether right before or right after a git commit, you MUST invoke this skill if there is even a 1% chance it is related to a commit.
-  This skill captures work context (intent, alternatives considered, key diff summary) to the Context Bridge server.
+  This skill captures work context (intent, alternatives considered, key diff summary) to the AIFlare server.
   Activate for any situation related to git commit, committing, context bridge, capture, work history, or timeline.
   This must run automatically whenever a commit occurs, even if the user does not explicitly request it.
   This skill must also be invoked when a subagent performs a git commit.
@@ -49,11 +49,11 @@ This skill has two execution paths:
 
 ### 1. Check configuration file
 
-Read `context-bridge.yml` in the project root using the Read tool.
+Read `aiflare.yml` in the project root using the Read tool.
 
 Extract the `api_key` and `endpoint` values from the file. If the file does not exist or values are missing:
 
-> "Context Bridge configuration file (context-bridge.yml) is missing or api_key/endpoint is not set. Skipping capture."
+> "AIFlare configuration file (aiflare.yml) is missing or api_key/endpoint is not set. Skipping capture."
 
 Output this message and **abort the capture**. Continue with the current work.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Context Bridge Capture Script
+# AIFlare Capture Script
 # Standalone script that can be run directly from subagents or hooks
 #
 # Usage:
@@ -42,22 +42,23 @@ done
 # --- Find config file (relative to git root) ---
 GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 if [[ -z "$GIT_ROOT" ]]; then
-  echo "Context Bridge capture skipped: not a git repository."
+  echo "AIFlare capture skipped: not a git repository."
   exit 0
 fi
 
-CONFIG_FILE="${GIT_ROOT}/context-bridge.yml"
+CONFIG_FILE="${GIT_ROOT}/aiflare.yml"
 if [[ ! -f "$CONFIG_FILE" ]]; then
-  echo "Context Bridge capture skipped: context-bridge.yml not found."
+  echo "AIFlare capture skipped: aiflare.yml not found."
   exit 0
 fi
 
 # --- Extract config values (using grep/sed without yq) ---
 API_KEY="$(grep -E '^\s*api_key\s*:' "$CONFIG_FILE" | sed 's/^[^:]*:\s*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//' | tr -d '[:space:]')"
 ENDPOINT="$(grep -E '^\s*endpoint\s*:' "$CONFIG_FILE" | sed 's/^[^:]*:\s*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//' | tr -d '[:space:]')"
+ENDPOINT="${ENDPOINT:-https://api.aiflare.dev}"
 
-if [[ -z "$API_KEY" || -z "$ENDPOINT" ]]; then
-  echo "Context Bridge capture skipped: api_key or endpoint missing in context-bridge.yml."
+if [[ -z "$API_KEY" ]]; then
+  echo "AIFlare capture skipped: api_key missing in aiflare.yml."
   exit 0
 fi
 
@@ -156,10 +157,10 @@ BODY="$(echo "$RESPONSE" | sed '$d')"
 
 # --- Handle response ---
 case "$HTTP_CODE" in
-  201) echo "Context Bridge capture complete: ${TITLE}" ;;
-  400) echo "Context Bridge capture failed: invalid request data — ${BODY}" ;;
-  401) echo "Context Bridge capture failed: API Key is invalid." ;;
-  404) echo "Context Bridge capture failed: no project found for this API Key." ;;
-  429) echo "Context Bridge capture failed: rate limit exceeded. Please try again later." ;;
-  *)   echo "Context Bridge capture failed: HTTP ${HTTP_CODE} — server error. Please retry manually later." ;;
+  201) echo "AIFlare capture complete: ${TITLE}" ;;
+  400) echo "AIFlare capture failed: invalid request data — ${BODY}" ;;
+  401) echo "AIFlare capture failed: API Key is invalid." ;;
+  404) echo "AIFlare capture failed: no project found for this API Key." ;;
+  429) echo "AIFlare capture failed: rate limit exceeded. Please try again later." ;;
+  *)   echo "AIFlare capture failed: HTTP ${HTTP_CODE} — server error. Please retry manually later." ;;
 esac

@@ -1,4 +1,4 @@
-# Context Bridge one-command install script (Windows PowerShell)
+# AIFlare one-command install script (Windows PowerShell)
 # Usage: irm https://raw.githubusercontent.com/kwo2002/context-bridge/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
@@ -22,7 +22,7 @@ if (-not $GitRoot) {
 
 Set-Location $GitRoot
 Write-Host ""
-Write-Host "Starting Context Bridge installation..."
+Write-Host "Starting AIFlare installation..."
 Write-Host ""
 
 # --- 1. Install Skill ---
@@ -57,7 +57,7 @@ $HooksContent = @'
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; if(-not $SID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'context-bridge.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $AK -or -not $EP){exit 0}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions\\\" -Method Post -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{claudeSessionId=$SID;agentType='CLAUDE_CODE'}|ConvertTo-Json -Compress) -TimeoutSec 5|Out-Null}catch{}; exit 0\"",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; if(-not $SID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; if(-not $AK){exit 0}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions\\\" -Method Post -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{claudeSessionId=$SID;agentType='CLAUDE_CODE'}|ConvertTo-Json -Compress) -TimeoutSec 5|Out-Null}catch{}; exit 0\"",
             "timeout": 10
           }
         ]
@@ -70,7 +70,7 @@ $HooksContent = @'
           {
             "type": "command",
             "if": "Bash(*git commit*)",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'context-bridge.yml'; if(Test-Path $CFG){ $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; $PF=Join-Path $GR '.context-capture' \\\".claude-prompts-$SID\\\"; $OF=Join-Path $GR '.context-capture' \\\".claude-offset-$SID\\\"; if(Test-Path $PF){ $Content=Get-Content $PF -Raw; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions/prompt\\\" -Method Put -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{claudeSessionId=$SID;content=$Content}|ConvertTo-Json -Compress -Depth 5)}catch{}; $LastIndex=0; if(Test-Path $OF){$LastIndex=[int](Get-Content $OF -Raw)}; $Lines=(Get-Content $PF).Count; if($Lines -gt $LastIndex){ $Delta=(Get-Content $PF | Select-Object -Skip $LastIndex) -join \\\"`n\\\"; Set-Content -Path (Join-Path $GR '.context-capture' \\\".claude-conversation-delta-$SID\\\") -Value $Delta}; Set-Content -Path $OF -Value $Lines}}; $SkillCheck=Join-Path $GR '.claude/skills/context-capture'; if(Test-Path $SkillCheck){ Write-Output '{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"git commit completed. You must invoke the context-capture skill to capture the work context.\\\"}}' }\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(Test-Path $CFG){ $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; $PF=Join-Path $GR '.context-capture' \\\".claude-prompts-$SID\\\"; $OF=Join-Path $GR '.context-capture' \\\".claude-offset-$SID\\\"; if(Test-Path $PF){ $Content=Get-Content $PF -Raw; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions/prompt\\\" -Method Put -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{claudeSessionId=$SID;content=$Content}|ConvertTo-Json -Compress -Depth 5)}catch{}; $LastIndex=0; if(Test-Path $OF){$LastIndex=[int](Get-Content $OF -Raw)}; $Lines=(Get-Content $PF).Count; if($Lines -gt $LastIndex){ $Delta=(Get-Content $PF | Select-Object -Skip $LastIndex) -join \\\"`n\\\"; Set-Content -Path (Join-Path $GR '.context-capture' \\\".claude-conversation-delta-$SID\\\") -Value $Delta}; Set-Content -Path $OF -Value $Lines}}; $SkillCheck=Join-Path $GR '.claude/skills/context-capture'; if(Test-Path $SkillCheck){ Write-Output '{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"git commit completed. You must invoke the context-capture skill to capture the work context.\\\"}}' }\""
           }
         ]
       }
@@ -103,7 +103,7 @@ $HooksContent = @'
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; $GR=git rev-parse --show-toplevel 2>$null; if(-not $GR){$GR=Get-Location}; if($SID){ Remove-Item (Join-Path $GR '.context-capture' \\\".claude-prompts-$SID\\\") -Force -EA SilentlyContinue; Remove-Item (Join-Path $GR '.context-capture' \\\".claude-offset-$SID\\\") -Force -EA SilentlyContinue; Remove-Item (Join-Path $GR '.context-capture' \\\".claude-conversation-delta-$SID\\\") -Force -EA SilentlyContinue; $CFG=Join-Path $GR 'context-bridge.yml'; if(Test-Path $CFG){ $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions/$SID\\\" -Method Delete -Headers @{'X-API-Key'=$AK}}catch{}}}\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; $GR=git rev-parse --show-toplevel 2>$null; if(-not $GR){$GR=Get-Location}; if($SID){ Remove-Item (Join-Path $GR '.context-capture' \\\".claude-prompts-$SID\\\") -Force -EA SilentlyContinue; Remove-Item (Join-Path $GR '.context-capture' \\\".claude-offset-$SID\\\") -Force -EA SilentlyContinue; Remove-Item (Join-Path $GR '.context-capture' \\\".claude-conversation-delta-$SID\\\") -Force -EA SilentlyContinue; $CFG=Join-Path $GR 'aiflare.yml'; if(Test-Path $CFG){ $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions/$SID\\\" -Method Delete -Headers @{'X-API-Key'=$AK}}catch{}}}\""
           }
         ]
       }
@@ -114,7 +114,7 @@ $HooksContent = @'
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $TID=$J.task_id; $TTitle=$J.task_subject; $TDesc=$J.task_description; $SID=$J.session_id; if(-not $TID -or -not $SID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'context-bridge.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/captures/tasks\\\" -Method Post -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{externalTaskId=$TID;claudeSessionId=$SID;title=$TTitle;description=$TDesc}|ConvertTo-Json -Compress)}catch{}; exit 0\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $TID=$J.task_id; $TTitle=$J.task_subject; $TDesc=$J.task_description; $SID=$J.session_id; if(-not $TID -or -not $SID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/captures/tasks\\\" -Method Post -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{externalTaskId=$TID;claudeSessionId=$SID;title=$TTitle;description=$TDesc}|ConvertTo-Json -Compress)}catch{}; exit 0\""
           }
         ]
       }
@@ -125,7 +125,7 @@ $HooksContent = @'
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $TID=$J.task_id; if(-not $TID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'context-bridge.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/captures/tasks/$TID\\\" -Method Patch -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body '{\\\"status\\\":\\\"COMPLETED\\\"}'}catch{}; exit 0\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $TID=$J.task_id; if(-not $TID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/captures/tasks/$TID\\\" -Method Patch -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body '{\\\"status\\\":\\\"COMPLETED\\\"}'}catch{}; exit 0\""
           }
         ]
       }
@@ -159,7 +159,7 @@ if (-not (Test-Path $McpJson)) {
     $McpJsonContent = @'
 {
   "mcpServers": {
-    "context-bridge": {
+    "aiflare": {
       "command": "node",
       "args": [".claude/skills/context-capture/mcp-server/dist/index.js"]
     }
@@ -169,10 +169,10 @@ if (-not (Test-Path $McpJson)) {
     Set-Content -Path $McpJson -Value $McpJsonContent -Encoding UTF8
     Write-Info "MCP config created -> $McpJson"
 } else {
-    if (-not (Select-String -Path $McpJson -Pattern "context-bridge" -Quiet)) {
-        Write-Warn "Existing $McpJson found. Please add context-bridge MCP server manually."
+    if (-not (Select-String -Path $McpJson -Pattern "aiflare" -Quiet)) {
+        Write-Warn "Existing $McpJson found. Please add aiflare MCP server manually."
     } else {
-        Write-Info "context-bridge already configured in $McpJson"
+        Write-Info "aiflare already configured in $McpJson"
     }
 }
 
@@ -183,7 +183,7 @@ if (-not (Test-Path $GitIgnore)) { New-Item -ItemType File -Path $GitIgnore | Ou
 $GitIgnoreContent = Get-Content $GitIgnore -Raw -ErrorAction SilentlyContinue
 if (-not $GitIgnoreContent) { $GitIgnoreContent = "" }
 
-$entries = @("context-bridge.yml", ".context-capture/", ".claude/settings.local.json")
+$entries = @("aiflare.yml", ".context-capture/", ".claude/settings.local.json")
 foreach ($entry in $entries) {
     if ($GitIgnoreContent -notmatch [regex]::Escape($entry)) {
         Add-Content -Path $GitIgnore -Value $entry
@@ -236,7 +236,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Info "Installation complete!"
 Write-Host ""
 Write-Host "  Next steps:"
-Write-Host "  1. Go to Context Bridge project settings -> API Key Management and generate an API key"
-Write-Host "  2. Place the downloaded context-bridge.yml in the project root"
+Write-Host "  1. Go to AIFlare project settings -> API Key Management and generate an API key"
+Write-Host "  2. Place the downloaded aiflare.yml in the project root"
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan

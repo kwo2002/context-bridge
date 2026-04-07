@@ -1,12 +1,12 @@
-# Context Bridge: push된 커밋의 타임라인 엔트리를 PUSHED 상태로 전환
+# AIFlare: push된 커밋의 타임라인 엔트리를 PUSHED 상태로 전환
 # 실패해도 push를 차단하지 않음
 
 $ErrorActionPreference = "SilentlyContinue"
 
 $GitRoot = git rev-parse --show-toplevel 2>$null
-$ConfigFile = Join-Path $GitRoot "context-bridge.yml"
+$ConfigFile = Join-Path $GitRoot "aiflare.yml"
 
-# context-bridge.yml이 없으면 조용히 종료
+# aiflare.yml이 없으면 조용히 종료
 if (-not (Test-Path $ConfigFile)) {
     exit 0
 }
@@ -23,7 +23,9 @@ foreach ($line in (Get-Content $ConfigFile)) {
     }
 }
 
-if (-not $Endpoint -or -not $ApiKey) {
+if (-not $Endpoint) { $Endpoint = "https://api.aiflare.dev" }
+
+if (-not $ApiKey) {
     exit 0
 }
 
