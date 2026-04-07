@@ -61,8 +61,17 @@ if [[ ! -f "$SETTINGS_FILE" ]]; then
   # Add mcpServers config to settings.local.json
   if ! grep -q 'mcpServers' "$SETTINGS_FILE" 2>/dev/null; then
     MCP_NODE_PATH=".claude/skills/context-capture/mcp-server/dist/index.js"
-    # Insert mcpServers before the closing }
-    sed -i.bak '$s/}$/,\n  "mcpServers": {\n    "context-bridge": {\n      "command": "node",\n      "args": ["'"$MCP_NODE_PATH"'"]\n    }\n  }\n}/' "$SETTINGS_FILE"
+    # Remove last } and append mcpServers block
+    sed -i.bak '$ d' "$SETTINGS_FILE"
+    cat >> "$SETTINGS_FILE" << MCPEOF
+  ,"mcpServers": {
+    "context-bridge": {
+      "command": "node",
+      "args": ["$MCP_NODE_PATH"]
+    }
+  }
+}
+MCPEOF
     rm -f "${SETTINGS_FILE}.bak"
     info "MCP Server config added to $SETTINGS_FILE"
   fi
