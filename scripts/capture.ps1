@@ -107,16 +107,27 @@ $Headers = @{
     "X-API-Key"    = $ApiKey
 }
 
+# --- Error log helper ---
+$ErrLogDir = Join-Path $GitRoot ".context-capture"
+if (-not (Test-Path $ErrLogDir)) { New-Item -ItemType Directory -Path $ErrLogDir -Force | Out-Null }
+
+function Write-ErrorLog {
+    param([string]$Msg)
+    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $LogFile = Join-Path $ErrLogDir "capture-error-$(Get-Date -Format 'yyyyMMddHHmmss').log"
+    "[$Timestamp] $Msg | commit=$CommitHash title=$Title" | Out-File -FilePath $LogFile -Encoding utf8 -Append
+}
+
 try {
     $Response = Invoke-RestMethod -Uri "$Endpoint/api/v1/captures" -Method Post -Headers $Headers -Body $JsonBody -ErrorAction Stop
     Write-Host "AIFlare capture complete: $Title"
 } catch {
     $StatusCode = $_.Exception.Response.StatusCode.value__
     switch ($StatusCode) {
-        400 { Write-Host "AIFlare capture failed: invalid request data" }
-        401 { Write-Host "AIFlare capture failed: API Key is invalid." }
-        404 { Write-Host "AIFlare capture failed: no project found for this API Key." }
-        429 { Write-Host "AIFlare capture failed: rate limit exceeded. Please try again later." }
-        default { Write-Host "AIFlare capture failed: HTTP $StatusCode — server error. Please retry manually later." }
+        400 { Write-Host "AIFlare capture failed: invalid request data";               Write-ErrorLog "HTTP 400: invalid request data" }
+        401 { Write-Host "AIFlare capture failed: API Key is invalid.";                Write-ErrorLog "HTTP 401: API Key is invalid" }
+        404 { Write-Host "AIFlare capture failed: no project found for this API Key."; Write-ErrorLog "HTTP 404: no project found for this API Key" }
+        429 { Write-Host "AIFlare capture failed: rate limit exceeded.";               Write-ErrorLog "HTTP 429: rate limit exceeded" }
+        default { Write-Host "AIFlare capture failed: HTTP $StatusCode — server error."; Write-ErrorLog "HTTP ${StatusCode}: $($_.Exception.Message)" }
     }
 }

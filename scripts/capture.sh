@@ -54,7 +54,7 @@ fi
 
 # --- Extract config values (using grep/sed without yq) ---
 API_KEY="$(grep -E '^\s*api_key\s*:' "$CONFIG_FILE" | sed 's/^[^:]*:\s*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//' | tr -d '[:space:]')"
-ENDPOINT="$(grep -E '^\s*endpoint\s*:' "$CONFIG_FILE" | sed 's/^[^:]*:\s*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//' | tr -d '[:space:]')"
+ENDPOINT="$(grep -E '^\s*endpoint\s*:' "$CONFIG_FILE" | sed 's/^[^:]*:\s*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//' | tr -d '[:space:]' || true)"
 ENDPOINT="${ENDPOINT:-https://api.aiflare.dev}"
 
 if [[ -z "$API_KEY" ]]; then
@@ -155,12 +155,22 @@ RESPONSE="$(curl -s -w "\n%{http_code}" \
 HTTP_CODE="$(echo "$RESPONSE" | tail -1)"
 BODY="$(echo "$RESPONSE" | sed '$d')"
 
+# --- Error log helper ---
+ERR_LOG_DIR="${GIT_ROOT}/.context-capture"
+mkdir -p "$ERR_LOG_DIR"
+
+log_error() {
+  local msg="$1"
+  local log_file="${ERR_LOG_DIR}/capture-error-$(date '+%Y%m%d%H%M%S').log"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${msg} | commit=${COMMIT_HASH} title=${TITLE}" >> "$log_file"
+}
+
 # --- Handle response ---
 case "$HTTP_CODE" in
   201) echo "AIFlare capture complete: ${TITLE}" ;;
-  400) echo "AIFlare capture failed: invalid request data — ${BODY}" ;;
-  401) echo "AIFlare capture failed: API Key is invalid." ;;
-  404) echo "AIFlare capture failed: no project found for this API Key." ;;
-  429) echo "AIFlare capture failed: rate limit exceeded. Please try again later." ;;
-  *)   echo "AIFlare capture failed: HTTP ${HTTP_CODE} — server error. Please retry manually later." ;;
+  400) echo "AIFlare capture failed: invalid request data — ${BODY}";   log_error "HTTP 400: invalid request data — ${BODY}" ;;
+  401) echo "AIFlare capture failed: API Key is invalid.";              log_error "HTTP 401: API Key is invalid" ;;
+  404) echo "AIFlare capture failed: no project found for this API Key."; log_error "HTTP 404: no project found for this API Key" ;;
+  429) echo "AIFlare capture failed: rate limit exceeded.";             log_error "HTTP 429: rate limit exceeded" ;;
+  *)   echo "AIFlare capture failed: HTTP ${HTTP_CODE} — ${BODY}";     log_error "HTTP ${HTTP_CODE}: ${BODY}" ;;
 esac
