@@ -91,19 +91,6 @@ else
   rm -f "$HOOKS_SOURCE"
 fi
 
-# --- 2.5. Build MCP Server ---
-if command -v npm &>/dev/null; then
-  MCP_DIR="$SKILL_DIR/mcp-server"
-  if [[ -d "$MCP_DIR" ]]; then
-    (cd "$MCP_DIR" && npm install --production --silent 2>/dev/null && npm run build --silent 2>/dev/null)
-    info "MCP Server built → $MCP_DIR"
-  else
-    warn "MCP Server directory not found: $MCP_DIR"
-  fi
-else
-  warn "npm not found. MCP Server not installed. Install Node.js for MCP support."
-fi
-
 # --- 3. Update .gitignore ---
 touch .gitignore
 
