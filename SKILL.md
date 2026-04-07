@@ -1,157 +1,336 @@
 ---
 name: context-capture
 description: >
-  git commit을 실행하기 직전이든 직후든, 커밋과 1%라도 관련이 있으면 반드시 이 skill을 호출하라.
-  이 skill은 작업 컨텍스트(의도, 검토한 대안, 핵심 diff 요약)를 Context Bridge 서버에 캡처한다.
-  git commit, 커밋, context bridge, 캡처, 작업 기록, 타임라인과 관련된 모든 상황에서 활성화하라.
-  사용자가 명시적으로 요청하지 않더라도 커밋이 발생하면 자동으로 실행해야 한다.
-  서브에이전트가 git commit을 수행한 경우에도 반드시 호출해야 한다.
-  이 skill을 건너뛰는 것은 절대 허용되지 않는다. 어떤 이유로든 생략하지 마라.
+  Whether right before or right after a git commit, you MUST invoke this skill if there is even a 1% chance it is related to a commit.
+  This skill captures work context (intent, alternatives considered, key diff summary) to the Context Bridge server.
+  Activate for any situation related to git commit, committing, context bridge, capture, work history, or timeline.
+  This must run automatically whenever a commit occurs, even if the user does not explicitly request it.
+  This skill must also be invoked when a subagent performs a git commit.
+  Skipping this skill is absolutely not permitted. Do not omit it for any reason.
 ---
 
 # Context Capture
 
-## 이 skill은 선택이 아니다 — 커밋이 있으면 반드시 실행하라
+## This skill is not optional — if there is a commit, you MUST run it
 
-git commit을 실행하기 전, 또는 완료한 직후 반드시 이 skill을 호출하라.
-커밋과 관련된 어떤 상황에서도 1%라도 가능성이 있으면 호출하라.
-이 skill을 건너뛰는 것은 허용되지 않는다.
+Invoke this skill before or immediately after executing a git commit.
+If there is even a 1% chance a situation is related to a commit, invoke it.
+Skipping this skill is not permitted.
 
-### 이런 생각이 들면 즉시 멈추고 이 skill을 실행하라
+### If you have these thoughts, stop immediately and run this skill
 
-| 생각 | 올바른 행동 |
-|------|-------------|
-| "커밋 메시지로 충분하다" | **지금 캡처하라.** 커밋 메시지는 "무엇"만 기록한다. "왜"는 지금 캡처해야만 남는다. |
-| "다음 작업이 급하다" | **캡처 먼저.** 30초면 끝난다. 컨텍스트를 잃으면 되돌릴 수 없다. |
-| "나중에 해도 된다" | **지금이 유일한 시점이다.** 대화 컨텍스트는 지금만 존재한다. |
-| "캡처 스크립트 실행했나 기억 안난다" | **지금 실행하라.** 중복 캡처는 무해하지만, 누락은 영구적 손실이다. |
-| "사소한 커밋이라 캡처할 게 없다" | **그래도 캡처하라.** 사소해 보여도 나중에 맥락이 필요해진다. |
-| "서브에이전트가 이미 처리했을 것이다" | **확인하라.** 확인 없이 가정하지 마라. |
+| Thought | Correct Action |
+|---------|----------------|
+| "The commit message is enough" | **Capture now.** Commit messages only record "what." The "why" can only be preserved by capturing now. |
+| "The next task is urgent" | **Capture first.** It takes 30 seconds. Lost context cannot be recovered. |
+| "I can do it later" | **Now is the only moment.** Conversation context only exists right now. |
+| "I don't remember if I ran the capture script" | **Run it now.** Duplicate captures are harmless, but missed captures are permanent loss. |
+| "This is a trivial commit with nothing to capture" | **Capture anyway.** Even trivial changes may need context later. |
+| "The subagent probably already handled it" | **Verify.** Do not assume without confirmation. |
 
-캡처는 커밋 작업 흐름의 필수 마지막 단계이며, 실패하더라도 현재 작업을 중단하지 않는다.
+Capture is a mandatory final step of the commit workflow. Even if it fails, do not interrupt the current work.
 
-## 왜 이 캡처가 중요한가
+## Why this capture matters
 
-커밋 메시지는 "무엇이 변경되었는가"만 기록한다. 하지만 6개월 뒤 코드를 다시 볼 때 정말 필요한 것은
-"왜 이렇게 만들었는가" — 어떤 대안을 검토했고, 왜 이 방식을 선택했으며, 어떤 리스크를 감수했는지다.
-지금 너의 대화 컨텍스트에 이 정보가 모두 있다. 커밋 직후가 이 정보를 기록할 수 있는 유일한 시점이다.
+Commit messages only record "what changed." But what you really need 6 months later when revisiting the code is
+"why it was built this way" — what alternatives were considered, why this approach was chosen, and what risks were accepted.
+All of this information is in your conversation context right now. Right after a commit is the only moment this information can be recorded.
 
-## 실행 경로 선택
+## Choosing the execution path
 
-이 skill에는 두 가지 실행 경로가 있다:
+This skill has two execution paths:
 
-| 상황 | 실행 방법 |
-|------|-----------|
-| **메인 세션에서 직접 커밋** | 아래 "절차" 섹션을 따른다 |
-| **서브에이전트가 커밋** | "서브에이전트 커밋 처리" 섹션을 따른다 |
+| Situation | Execution Method |
+|-----------|-----------------|
+| **Committing directly in the main session** | Follow the "Procedure" section below |
+| **Subagent committed** | Follow the "Subagent Commit Handling" section |
 
-## 절차
+## Procedure
 
-### 1. 설정 파일 확인
+### 1. Check configuration file
 
-프로젝트 루트의 `context-bridge.yml`을 Read 도구로 읽는다.
+Read `context-bridge.yml` in the project root using the Read tool.
 
-파일에서 `api_key`와 `endpoint` 두 값을 추출한다. 파일이 없거나 값이 누락되어 있으면:
+Extract the `api_key` and `endpoint` values from the file. If the file does not exist or values are missing:
 
-> "Context Bridge 설정 파일(context-bridge.yml)이 없거나 api_key/endpoint가 누락되어 캡처를 건너뜁니다."
+> "Context Bridge configuration file (context-bridge.yml) is missing or api_key/endpoint is not set. Skipping capture."
 
-이 메시지를 출력하고 **캡처를 중단**한다. 현재 작업은 계속 진행한다.
+Output this message and **abort the capture**. Continue with the current work.
 
-### 2. 커밋 해시 및 변경 파일 추출
+### 2. Extract commit hash and changed files
 
 ```bash
 git rev-parse HEAD
+git log -1 --format=%s HEAD
 git diff --name-only HEAD~1 HEAD
 ```
 
-두 명령의 결과를 각각 `commitHash`와 `changedFiles` 필드에 사용한다.
+Use the results of these three commands for the `commitHash`, `title`, and `changedFiles` fields respectively.
 
-### 3. 요약 데이터 생성
+### 3. Generate summary data
 
-이번 작업의 대화 컨텍스트를 돌아보고 아래 필드를 생성한다.
-프로젝트의 주 사용 언어(한국어, 영어 등)에 맞춰 작성한다.
+Review the conversation context of this work session and generate the fields below.
 
-**title** (필수): 작업을 한 줄로 요약한 제목. 50자 이내. 커밋 메시지보다 서술적으로.
-- 좋은 예: "결제 모듈의 재시도 로직을 Exponential Backoff로 교체"
-- 나쁜 예: "fix: retry logic" (너무 짧고 맥락 없음)
+**IMPORTANT — Language rule**: All text fields (intent, alternatives, diffSummary) MUST be written in the same language as the project's recent git commit messages. Check `git log --oneline -3` to determine the language. For example, if commit messages are in Korean, write all fields in Korean. If in English, write in English. This skill document is written in English for accessibility, but the captured content must match the project's language.
 
-**intent** (필수): 이 작업을 수행한 이유와 배경. 2-5문장으로 "왜 이 변경이 필요했는가"에 답한다.
-- 기존 코드의 문제점이 무엇이었는지
-- 이 변경으로 어떤 개선이 이루어지는지
-- 관련된 요구사항이나 이슈가 있다면 언급
+#### General writing principles
 
-**alternatives** (선택): 검토했지만 선택하지 않은 대안. 대안이 없었으면 빈 문자열.
-- 각 대안에 대해: 무엇을 검토했고, 왜 선택하지 않았는지
+Apply to all text fields (intent, alternatives, diffSummary):
 
-**diffSummary** (선택): 핵심 변경 사항 요약. 의존성 변경, 알고리즘 교체, 설정 변경, 새로운 엔티티/API 추가 등 핵심 로직 위주.
-- 단순 포맷팅, 임포트 정리 등은 제외
-- 파일명과 변경 내용을 간결하게 나열
+- **Use Markdown**: Structure with line breaks (`\n`), bullets (`- `), and bold (`**...**`).
+- **One paragraph = one topic**: Do not cram multiple ideas into a single sentence. Use line breaks when the topic changes.
+- **Write for the future reader**: Ask yourself, "Can a developer seeing this code for the first time in 6 months understand this?"
+- **Use specific nouns**: Instead of "performance improvement," write "Removed N+1 query, reducing list query response time from 200ms to 50ms."
 
-**commitHash** (필수): 절차 2에서 추출한 값.
+---
 
-**agentType** (필수): 너의 에이전트 종류에 맞는 값을 선택한다.
+#### Auto-extracted fields
+
+These fields use command output as-is.
+
+**title** (required): Use the result of `git log -1 --format=%s HEAD` as-is.
+
+**commitHash** (required): The `git rev-parse HEAD` value extracted in step 2.
+
+**agentType** (required): Select the value matching your agent type.
 - Claude Code → `CLAUDE_CODE`
 - Gemini CLI → `GEMINI_CLI`
-- Codex -> `CODEX`
-- 그 외 → `OTHER`
+- Codex → `CODEX`
+- Other → `OTHER`
 
-**changedFiles** (필수): 이번 커밋에 포함된 변경 파일 목록. `git diff --name-only HEAD~1 HEAD` 결과를 사용한다.
-- 예: `["src/main/kotlin/PaymentService.kt", "src/test/kotlin/PaymentServiceTest.kt"]`
+**changedFiles** (required): List of files changed in this commit. Use the result of `git diff --name-only HEAD~1 HEAD`.
+- Example: `["src/main/kotlin/PaymentService.kt", "src/test/kotlin/PaymentServiceTest.kt"]`
 
-**tag** (필수): 이번 작업의 성격을 나타내는 태그. 아래 중 하나를 선택한다.
-- `REFACTORING`: 기존 코드 구조 개선 (동작 변경 없음)
-- `FEATURE`: 새로운 기능 추가
-- `BUGFIX`: 버그 수정
-- `TEST`: 테스트 추가/수정
-- `DOCS`: 문서 작성/수정
+**tag** (required): A tag representing the nature of this work. Choose one of the following.
+- `REFACTORING`: Code structure improvement (no behavior change)
+- `FEATURE`: New feature addition
+- `BUGFIX`: Bug fix
+- `TEST`: Test addition/modification
+- `DOCS`: Documentation creation/modification
 
-### 4. capture.sh 실행
+---
 
-절차 3에서 생성한 데이터를 인자로 넘겨 캡처 스크립트를 실행한다.
-스크립트가 설정 파일 읽기, JSON 생성, API 호출, 결과 처리를 모두 수행한다.
+#### intent (required)
+
+The reason and background for this work. Write in a **Problem → Solution → Effect** 3-part structure, separating each part with `\n\n`.
+
+**Structure template:**
+
+```
+**Problem**: The issue with existing behavior or the background requiring change (1-2 sentences)
+
+**Solution**: The approach taken in this change (1-2 sentences)
+
+**Effect**: What changes as a result — performance, stability, usability, etc. (1 sentence)
+```
+
+**Good example:**
+
+```
+**Problem**: Payment retries used Fixed Retry (3-second intervals),
+causing simultaneous retries to pile up during server overload, worsening outages.
+This pattern occurred 3 times in March alone.
+
+**Solution**: Applied Exponential Backoff + Jitter to distribute
+retry requests across the time axis.
+Max retry attempts: 5, initial interval: 1s, max interval: 32s.
+
+**Effect**: Ensures server recovery time + prevents simultaneous retry storms.
+The previous outage pattern is not expected to recur.
+```
+
+**Bad example:**
+
+```
+The existing Fixed Retry approach caused simultaneous retries to pile up during server overload, worsening outages. Applied Exponential Backoff + Jitter to distribute retry requests and secure server recovery time.
+```
+
+(No line breaks, no Problem/Solution/Effect separation, no specific numbers)
+
+**Checklist:**
+- Is the issue with existing behavior explicitly stated?
+- Is the approach taken in this change specifically described?
+- Is the effect/expected outcome included?
+- Are Problem/Solution/Effect separated by line breaks?
+
+---
+
+#### alternatives (optional)
+
+Alternatives that were considered but not chosen. Separate each alternative with a bold title + bullets for approach/rejection reason.
+
+**Structure template:**
+
+```
+**Alternative 1 — [Name]**
+- Approach: [What was considered]
+- Rejected because: [Why it was not chosen]
+
+**Alternative 2 — [Name]**
+- Approach: [What was considered]
+- Rejected because: [Why it was not chosen]
+```
+
+**An empty string ("no alternatives") is only permitted when:**
+- The requirements are clear enough that there is practically only one implementation approach (e.g., typo fix, config value change)
+- No alternatives were discussed during the conversation, and no reasonable alternatives come to mind
+
+Before writing, review the conversation context and verify whether any approaches were discussed.
+
+**Good example:**
+
+```
+**Alternative 1 — Increase Fixed Retry interval (3s→10s)**
+- Approach: Keep existing logic but increase interval to reduce load
+- Rejected because: Simultaneous requests could still pile up depending on traffic patterns.
+  Only a temporary mitigation, not a fundamental solution.
+
+**Alternative 2 — Introduce Circuit Breaker pattern**
+- Approach: Block requests entirely when failure rate exceeds threshold
+- Rejected because: Excessive complexity for the current service scale.
+  Backoff alone was deemed sufficiently effective.
+```
+
+**Bad example:**
+
+```
+There were other approaches but this one was the best.
+```
+
+(No alternative names, no rejection reasons, no structure)
+
+**Checklist:**
+- Have you reviewed all approaches discussed during the conversation?
+- Does each alternative have a name?
+- Are rejection reasons specific? (Not just "too complex" — give concrete reasons)
+- Are alternatives separated by line breaks?
+
+---
+
+#### diffSummary (optional)
+
+Summarize key changes as per-file bullets.
+
+**Structure template:**
+
+```
+- **filename**: Summary of changes
+- **filename**: Summary of changes
+```
+
+**Include**: Business logic changes, schema/entity changes, API changes, config changes, dependency changes
+
+**Exclude**: Import cleanup, formatting, auto-generated files, simple test assert additions without logic changes
+
+**Good example:**
+
+```
+- **PaymentRetryService.kt**: Replaced retry logic from FixedDelay to ExponentialBackoff.
+  maxAttempts=5, initialInterval=1000ms, multiplier=2.0, maxInterval=32000ms.
+- **application.yml**: Added 3 retry-related settings
+  (maxAttempts, initialInterval, multiplier)
+- **PaymentRetryServiceTest.kt**: Added 3 backoff behavior verification tests
+  (normal retry, max interval reached, jitter range verification)
+```
+
+**Bad example:**
+
+```
+PaymentRetryService.kt: Changed retry logic. application.yml: Added settings. PaymentRetryServiceTest.kt: Added tests.
+```
+
+(No line breaks, no specifics, impossible to tell what changed and how)
+
+**Checklist:**
+- Are key logic changes separated by file?
+- Is "what changed and how" specifically described for each file?
+- Are non-essential changes like import cleanup and formatting excluded?
+
+### 4. Run capture script
+
+Pass the data generated in step 3 as arguments to the capture script.
+The script handles config file reading, JSON generation, API calls, and result processing.
+
+Choose the appropriate script based on the operating system:
+
+**macOS / Linux:**
 
 ```bash
 bash .claude/skills/context-capture/scripts/capture.sh \
-  --title "여기에 title" \
-  --intent "여기에 intent" \
-  --commit-hash "여기에 commitHash" \
+  --title "title here" \
+  --intent "intent here" \
+  --commit-hash "commitHash here" \
   --agent-type "CLAUDE_CODE" \
   --changed-files "file1.kt,file2.kt" \
-  --tag "여기에 tag (REFACTORING|FEATURE|BUGFIX|TEST|DOCS)" \
-  --alternatives "여기에 alternatives" \
-  --diff-summary "여기에 diffSummary"
+  --tag "tag here (REFACTORING|FEATURE|BUGFIX|TEST|DOCS)" \
+  --alternatives "alternatives here" \
+  --diff-summary "diffSummary here"
 ```
 
-캡처 실패 시 현재 작업 흐름을 절대 중단하지 않는다. 경고만 출력하고 원래 작업을 계속한다.
+**Windows (PowerShell):**
 
-## 서브에이전트 커밋 처리
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .claude/skills/context-capture/scripts/capture.ps1 `
+  -Title "title here" `
+  -Intent "intent here" `
+  -CommitHash "commitHash here" `
+  -AgentType "CLAUDE_CODE" `
+  -ChangedFiles "file1.kt,file2.kt" `
+  -Tag "tag here (REFACTORING|FEATURE|BUGFIX|TEST|DOCS)" `
+  -Alternatives "alternatives here" `
+  -DiffSummary "diffSummary here"
+```
 
-서브에이전트(Agent 도구로 생성된 에이전트)는 Skill 도구에 접근할 수 없다.
-따라서 서브에이전트가 git commit을 수행하는 경우, 프롬프트에 capture.sh 실행 지시를 포함한다.
+If capture fails, never interrupt the current workflow. Only output a warning and continue with the original work.
 
-서브에이전트에게 작업을 위임할 때, 프롬프트 끝에 다음 지시를 추가한다:
+## Subagent Commit Handling
+
+Subagents (agents created via the Agent tool) do not have access to the Skill tool.
+Therefore, when a subagent performs a git commit, include capture script execution instructions in the prompt.
+
+When delegating work to a subagent, append the following instructions at the end of the prompt.
+
+**macOS / Linux:**
 
 ```
-git commit 완료 후, 반드시 아래 스크립트를 실행하라:
+After completing git commit, you MUST run the following script:
 
 bash .claude/skills/context-capture/scripts/capture.sh \
-  --title "작업 제목 (50자 이내)" \
-  --intent "왜 이 작업을 했는가 (2-5문장)" \
+  --title "Work title (under 50 characters)" \
+  --intent "Why this work was done (2-5 sentences)" \
   --commit-hash "$(git rev-parse HEAD)" \
   --agent-type "CLAUDE_CODE" \
   --changed-files "$(git diff --name-only HEAD~1 HEAD | paste -sd',' -)" \
-  --tag "REFACTORING|FEATURE|BUGFIX|TEST|DOCS 중 하나" \
-  --alternatives "검토한 대안 (없으면 빈 문자열)" \
-  --diff-summary "핵심 변경 사항 요약"
+  --tag "One of REFACTORING|FEATURE|BUGFIX|TEST|DOCS" \
+  --alternatives "Alternatives considered (empty string if none)" \
+  --diff-summary "Summary of key changes"
 
-스크립트가 실패해도 작업을 중단하지 말고 계속 진행하라.
+Continue working even if the script fails.
 ```
 
-서브에이전트가 자신의 작업 컨텍스트를 가장 잘 알고 있으므로 이 방법이 가장 정확하다.
+**Windows (PowerShell):**
 
-프롬프트에 캡처 지시를 포함하지 못한 경우, 서브에이전트 완료 후 컨트롤러가 위 "절차" 섹션을 따라 직접 캡처한다.
-서브에이전트 결과에 커밋 해시가 포함되지 않은 경우 `git log --oneline -1`로 확인한다.
+```
+After completing git commit, you MUST run the following script:
 
-## API 상세
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .claude/skills/context-capture/scripts/capture.ps1 `
+  -Title "Work title (under 50 characters)" `
+  -Intent "Why this work was done (2-5 sentences)" `
+  -CommitHash (git rev-parse HEAD) `
+  -AgentType "CLAUDE_CODE" `
+  -ChangedFiles ((git diff --name-only HEAD~1 HEAD) -join ',') `
+  -Tag "One of REFACTORING|FEATURE|BUGFIX|TEST|DOCS" `
+  -Alternatives "Alternatives considered (empty string if none)" `
+  -DiffSummary "Summary of key changes"
 
-캡처 API의 전체 스펙은 `references/capture-api.md`를 참조한다.
+Continue working even if the script fails.
+```
+
+The subagent knows its own work context best, making this the most accurate method.
+
+If capture instructions were not included in the prompt, the controller should follow the "Procedure" section above to capture directly after the subagent completes.
+If the subagent result does not include a commit hash, verify with `git log --oneline -1`.
+
+## API Reference
+
+See `references/capture-api.md` for the full capture API specification.

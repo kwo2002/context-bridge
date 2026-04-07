@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Context Bridge: push된 커밋의 타임라인 엔트리를 PUSHED 상태로 전환
+# 실패해도 push를 차단하지 않음
+
+set -uo pipefail
+
+GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+CONFIG_FILE="${GIT_ROOT}/context-bridge.yml"
+
+# context-bridge.yml이 없으면 조용히 종료
+if [[ ! -f "$CONFIG_FILE" ]]; then
+  exit 0
+fi
+
+# 설정 읽기
+ENDPOINT="$(grep -E '^endpoint:' "$CONFIG_FILE" | sed 's/^endpoint:[[:space:]]*//' | tr -d '"' | tr -d "'")"
+API_KEY="$(grep -E '^api_key:' "$CONFIG_FILE" | sed 's/^api_key:[[:space:]]*//' | tr -d '"' | tr -d "'")"
+
+if [[ -z "$ENDPOINT" || -z "$API_KEY" ]]; then
+  exit 0
+fi
+
+# stdin에서 push 정보 파싱
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # 삭제 push인 경우 스킵
+  if [[ "$local_sha" == "0000000000000000000000000000000000000000" ]]; then
+    continue
+  fi
+
+  # 브랜치명 추출 (refs/heads/feature/auth -> feature/auth)
+  branch="${local_ref#refs/heads/}"
+
+  # push되는 커밋 해시 목록 추출
+  if [[ "$remote_sha" == "0000000000000000000000000000000000000000" ]]; then
+    # 새 브랜치: 모든 커밋
+    commit_hashes="$(git log "$local_sha" --format="%H" --not --remotes 2>/dev/null || echo "")"
+  else
+    # 기존 브랜치: remote..local 범위
+    commit_hashes="$(git log "${remote_sha}..${local_sha}" --format="%H" 2>/dev/null || echo "")"
+  fi
+
+  if [[ -z "$commit_hashes" ]]; then
+    continue
+  fi
+
+  # JSON 배열 생성
+  json_array="["
+  first=true
+  while IFS= read -r hash; do
+    if [[ -n "$hash" ]]; then
+      if [[ "$first" == true ]]; then
+        first=false
+      else
+        json_array+=","
+      fi
+      json_array+="\"$hash\""
+    fi
+  done <<< "$commit_hashes"
+  json_array+="]"
+
+  # API 호출 (실패해도 무시)
+  curl -s -X POST "${ENDPOINT}/api/v1/captures/publish" \
+    -H "Content-Type: application/json" \
+    -H "X-API-Key: ${API_KEY}" \
+    -d "{\"commitHashes\":${json_array},\"branch\":\"${branch}\"}" \
+    >/dev/null 2>&1 || true
+
+done
+
+exit 0
