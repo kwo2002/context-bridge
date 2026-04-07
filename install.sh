@@ -91,6 +91,13 @@ else
   rm -f "$HOOKS_SOURCE"
 fi
 
+# --- 2.5. Install MCP Server dependencies ---
+MCP_DIR="$SKILL_DIR/mcp-server"
+if [[ -d "$MCP_DIR" ]] && command -v npm &>/dev/null; then
+  (cd "$MCP_DIR" && npm install --production --silent 2>/dev/null) || true
+  info "MCP Server ready → $MCP_DIR"
+fi
+
 # --- 3. Update .gitignore ---
 touch .gitignore
 
