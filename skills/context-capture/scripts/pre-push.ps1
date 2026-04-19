@@ -1,17 +1,17 @@
-# AIFlare: push된 커밋의 타임라인 엔트리를 PUSHED 상태로 전환
-# 실패해도 push를 차단하지 않음
+# AIFlare: mark pushed commits' timeline entries as PUSHED
+# Failures never block the push
 
 $ErrorActionPreference = "SilentlyContinue"
 
 $GitRoot = git rev-parse --show-toplevel 2>$null
 $ConfigFile = Join-Path $GitRoot "aiflare.yml"
 
-# aiflare.yml이 없으면 조용히 종료
+# Exit silently when aiflare.yml is missing
 if (-not (Test-Path $ConfigFile)) {
     exit 0
 }
 
-# 설정 읽기
+# Read configuration
 $Endpoint = ""
 $ApiKey = ""
 foreach ($line in (Get-Content $ConfigFile)) {
@@ -29,7 +29,7 @@ if (-not $ApiKey) {
     exit 0
 }
 
-# stdin에서 push 정보 파싱
+# Parse push info from stdin
 $inputLines = @($input)
 foreach ($line in $inputLines) {
     $parts = $line -split '\s+'
@@ -39,13 +39,13 @@ foreach ($line in $inputLines) {
     $localSha = $parts[1]
     $remoteSha = $parts[3]
 
-    # 삭제 push인 경우 스킵
+    # Skip delete pushes
     if ($localSha -eq "0000000000000000000000000000000000000000") { continue }
 
-    # 브랜치명 추출
+    # Extract branch name
     $branch = $localRef -replace '^refs/heads/', ''
 
-    # push되는 커밋 해시 목록 추출
+    # Collect the commit hashes being pushed
     if ($remoteSha -eq "0000000000000000000000000000000000000000") {
         $commitHashes = git log $localSha --format="%H" --not --remotes 2>$null
     } else {
@@ -54,16 +54,16 @@ foreach ($line in $inputLines) {
 
     if (-not $commitHashes) { continue }
 
-    # 배열로 변환
+    # Convert to array
     $hashArray = @($commitHashes) | Where-Object { $_ }
 
-    # JSON payload 생성
+    # Build JSON payload
     $payload = @{
         commitHashes = $hashArray
         branch       = $branch
     } | ConvertTo-Json -Depth 5 -Compress
 
-    # API 호출 (실패해도 무시)
+    # Call the API (ignore failures)
     $headers = @{
         "Content-Type" = "application/json"
         "X-API-Key"    = $ApiKey
@@ -72,7 +72,7 @@ foreach ($line in $inputLines) {
     try {
         Invoke-RestMethod -Uri "$Endpoint/api/v1/captures/publish" -Method Post -Headers $headers -Body $payload | Out-Null
     } catch {
-        # 실패해도 push를 차단하지 않음
+        # Failures never block the push
     }
 }
 

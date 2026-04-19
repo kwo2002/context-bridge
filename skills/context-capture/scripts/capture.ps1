@@ -72,7 +72,7 @@ if (-not $ConversationSnippet -and $ClaudeSessionId) {
     }
 }
 
-# --- continuation flag: AskUserQuestion 직후 커밋이면 true ---
+# --- continuation flag: true if the commit happens right after an AskUserQuestion ---
 $Continuation = $false
 if ($ClaudeSessionId) {
     $PendingQuestionFile = Join-Path $GitRoot ".context-capture" ".pending-question-$ClaudeSessionId"

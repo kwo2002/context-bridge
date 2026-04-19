@@ -79,7 +79,7 @@ if [[ -z "$CONVERSATION_SNIPPET" && -n "$CLAUDE_SESSION_ID" ]]; then
   fi
 fi
 
-# --- continuation flag: AskUserQuestion 직후 커밋이면 true ---
+# --- continuation flag: true if the commit happens right after an AskUserQuestion ---
 CONTINUATION="false"
 if [[ -n "$CLAUDE_SESSION_ID" ]]; then
   PENDING_QUESTION_FILE="${GIT_ROOT}/.context-capture/.pending-question-${CLAUDE_SESSION_ID}"

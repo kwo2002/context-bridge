@@ -1,207 +1,207 @@
 ---
 name: prompt-evaluate
-description: 현재 세션의 사용자 프롬프트를 Claude Code 모범사례 기준으로 평가하고 보고서를 저장한다.
+description: Evaluate the current session's user prompts against Claude Code best practices and save a coach-style report.
 ---
 
-현재 세션의 사용자 프롬프트 품질을 평가해 **세션 직후 1분 이내에 읽는 coach 리포트**를 생성한다. 회고·아카이브용 장문 리포트가 아니다.
+Evaluate the quality of the current session's user prompts and produce a **coach-style report meant to be read within a minute of the session ending**. This is not a long-form retrospective or archival report.
 
-## 작성 언어
+## Output language
 
-보고서는 한국어로 작성한다.
+Write the report in the same language as the project's recent git commit messages (check `git log --oneline -3`). This skill document is written in English for accessibility, but the report itself must match the project's language.
 
-## 실행 순서
+## Execution steps
 
-1. `get_session_prompts` MCP tool을 호출하여 현재 세션의 프롬프트 내용을 가져온다.
-   - 인자(`$ARGUMENTS`)로 세션 ID가 주어지면 `sessionId`로 전달한다.
-   - 없으면 생략한다 (현재 세션이 자동 사용됨).
-   - 도구가 "PROMPT_NO_CONTENT" 또는 "프롬프트가 없습니다" 류의 에러를 반환하면: 사용자에게 "이 세션에 저장된 프롬프트가 없습니다. git commit이 한 번이라도 일어난 세션에서 실행해주세요."를 안내하고 종료한다.
+1. Call the `get_session_prompts` MCP tool to retrieve the prompt content of the current session.
+   - If a session ID is provided via `$ARGUMENTS`, pass it as `sessionId`.
+   - Otherwise omit it (the current session is used automatically).
+   - If the tool returns an error like `PROMPT_NO_CONTENT` or "no prompts found": inform the user with "No saved prompts exist for this session. Please run this in a session where at least one git commit has occurred." and exit.
 
-2. **먼저 대화의 전체 맥락을 파악한다.** 받은 content는 아래 형태의 JSON Lines(한 줄당 하나의 JSON 객체, `role`은 `"user"` 또는 `"assistant"`, `content`는 해당 턴의 텍스트)다. 평가에 들어가기 전에 반드시 흐름을 먼저 읽어 "이 세션에서 사용자가 달성하려던 목표가 무엇이었는지", "어떤 주제/작업이 오갔는지", "후반부 프롬프트가 앞 대화의 어떤 맥락을 전제로 하는지"를 파악한다. 맥락 없이 개별 프롬프트만 보고 평가하면 승인/거절/짧은 대답("승인", "1", "B") 같은 turn을 과소평가하기 쉽다 — 이런 응답은 직전 assistant 턴이 제시한 선택지/질문과 짝지어 해석한다.
+2. **First, understand the full conversation context.** The content returned is JSON Lines (one JSON object per line, `role` is `"user"` or `"assistant"`, `content` is the text of that turn). Before evaluating, read the flow to understand "what goal the user was trying to achieve in this session", "what topics/tasks were exchanged", and "what context the later prompts presuppose from earlier conversation". Evaluating individual prompts without context makes it easy to undervalue short approval/rejection turns ("approve", "1", "B") — interpret these by pairing them with the options or questions the preceding assistant turn raised.
 
-   예시 JSON Lines 형태:
+   Example JSON Lines format:
 
    ```jsonl
-   {"role":"user","content":"/brainstorming @docs/... 참고해. 계정설정 페이지 진입시 ..."}
-   {"role":"assistant","content":"두 문제의 근본 원인을 파악했어요. ... A/B 중 선택하거나 ..."}
-   {"role":"user","content":"계정설정을 모달로 하는경우가 있어? claude 도 모달로 뜨지는 않던데.."}
-   {"role":"assistant","content":"실제 베스트 프랙티스 ... 옵션 1/2/3 중 ..."}
-   {"role":"user","content":"옵션 1"}
+   {"role":"user","content":"/brainstorming @docs/... Please reference. When entering the account settings page ..."}
+   {"role":"assistant","content":"I identified the root causes of both problems. ... Choose A/B or ..."}
+   {"role":"user","content":"Is there a case where account settings are in a modal? Claude's doesn't seem to show as modal either."}
+   {"role":"assistant","content":"Actual best practices ... Among options 1/2/3 ..."}
+   {"role":"user","content":"Option 1"}
    ```
 
-   이 예시에서 "옵션 1" 같은 짧은 user 턴은 직전 assistant 턴이 제시한 선택지에 대한 결정으로 해석해야지 "컨텍스트가 부족한 프롬프트"로 평가해서는 안 된다.
+   In this example, a short user turn like "Option 1" must be interpreted as a decision on the options presented by the preceding assistant turn — it should not be evaluated as a "prompt lacking context."
 
-3. 2단계에서 파악한 대화 흐름을 바탕으로, 아래 "평가 철학"과 "Anti-inflation 가드레일"을 **반드시 준수**하면서 "내부 평가 렌즈"로 프롬프트를 분석한다. 렌즈의 7축은 **출력 구조가 아니라** 프롬프트를 읽을 때 내부에서 돌리는 체크리스트다.
+3. Based on the conversation flow understood in step 2, analyze the prompts using the "internal evaluation lens" below, **strictly following** the "Evaluation philosophy" and "Anti-inflation guardrails". The 7 axes of the lens are **not an output structure** — they are an internal checklist you run through while reading the prompts.
 
-4. "보고서 형식"의 3섹션 구조에 맞춰 Markdown 리포트를 작성하고 사용자에게 출력한다. 7축을 섹션으로 나열하지 않는다. 별점·총점을 출력하지 않는다.
+4. Write a Markdown report following the 3-section structure in "Report format" and output it to the user. Do not list the 7 axes as sections. Do not output star ratings or total scores.
 
-5. `save_prompt_evaluation_report` MCP tool을 호출하여 보고서를 서버에 저장한다.
-   - `title`: 위에서 생성한 보고서 제목
-   - `content`: 보고서 전체 내용
-   - `sessionId`: 1단계와 동일 값
-   - 저장 실패 시 원인은 안내하되, 보고서 본문이 이미 위에 출력되어 있으므로 사용자가 복사할 수 있도록 한다.
+5. Call the `save_prompt_evaluation_report` MCP tool to save the report to the server.
+   - `title`: the report title generated above
+   - `content`: full report contents
+   - `sessionId`: same value as step 1
+   - If saving fails, explain the cause but since the report body was already shown above, the user can copy it.
 
-6. 저장 결과를 한 줄로 안내한다.
-
----
-
-## 평가 철학
-
-- **매번 모든 축을 채우지 않는다.** 이 세션에 존재하는 증거로만 쓴다. 사례가 없는 축은 리포트에서 등장시키지 않는다.
-- **리포트의 가치는 길이가 아니라 밀도에서 나온다.** 모든 문장은 세션에서 인용 가능한 프롬프트를 근거로 하거나, 다음 세션에 바로 붙여넣을 수 있는 문장이어야 한다.
-- **리포트의 최종 효용 = 사용자가 다음 세션에서 다르게 행동하게 만드는 능력.** 회고용 관조적 평가가 아니라 즉시 실행 가능한 처방이어야 한다.
-
-## Anti-inflation 가드레일
-
-리포트 작성 중 아래 6개 규칙을 **반드시** 준수한다.
-
-1. **증거 원칙**: 모든 항목(칭찬이든 비판이든)은 세션에서 실제로 인용 가능한 프롬프트/턴을 근거로 한다. 인용이 붙지 않는 항목은 쓰지 않는다.
-
-2. **완충 표현 금지**: "사실상 ~에 해당한다", "~한 것으로 볼 수 있다", "~에 준한다" 같이 사례를 억지로 끼워 맞추는 표현을 쓰지 않는다. 해당 사례가 없으면 그 항목 자체를 쓰지 않는다.
-
-3. **의도 추측 금지**: 사용자의 내적 동기·지식·의도를 추측해 칭찬하지 않는다. 예: "PR 가이드라인을 *의식해*", "CLAUDE.md를 *참고해*" 같은 표현은 관찰 불가능한 주장이므로 금지. 관찰 가능한 프롬프트 텍스트만 근거로 삼는다.
-
-4. **편향 캘리브레이션**: "작동한 것" 섹션이 "작동하지 않은 것"보다 길거나 많으면 재검토한다. 기본 자세는 "개선할 것이 항상 있다". 세션이 정말 훌륭한 경우에도 "작동하지 않은 것"에 최소 1개는 강하게 짚는다.
-
-5. **샘플 가드**: 프롬프트 수가 3개 미만이면 "작동하지 않은 것" 1개 + "다음 세션용 템플릿" 1개만 출력하고 나머지는 "샘플 부족으로 심층 진단 생략"으로 마무리한다. 억지로 3섹션을 채우지 않는다.
-
-6. **자기편향 주의**: 이 평가 도구·이 스킬 자체를 개발하거나 메타적으로 다루는 세션을 평가할 때는 특히 엄격하게 적용한다. 메타 작업에 대한 칭찬 유혹이 크다. 같은 증거라면 일반 세션보다 한 단계 더 비판적으로 본다.
-
-## 내부 평가 렌즈 (출력 아님)
-
-아래 7개 기준은 **프롬프트를 읽을 때 속으로 돌리는 체크리스트**다. 리포트의 섹션 제목으로 등장시키지 않는다. 출처: [Claude Code Best Practices](https://code.claude.com/docs/en/best-practices).
-
-### 1. Claude가 자기 결과를 검증할 수 있는 수단 제공
-
-성공 기준·테스트 케이스·스크린샷·"이렇게 되면 성공" 조건이 프롬프트에 포함되어 있는지. "이걸 고쳐줘", "더 좋게 만들어줘" 류 검증 불가능한 요청은 약점.
-
-### 2. 프롬프트에 구체적 컨텍스트 제공
-
-파일명·컴포넌트명·라인 번호·재현 절차가 명시되는지. "사이드바 고쳐줘" 같은 탐색 범위 무제한 요청은 약점. 단, 탐색 단계에서는 의도적으로 모호한 프롬프트가 유용할 수 있다.
-
-### 3. 풍부한 컨텍스트 전달 수단 활용
-
-`@` 파일 참조, 에러/로그 붙여넣기, 스크린샷, 관련 문서 URL을 쓰는지. Claude에게 찾게 시키거나 에러를 말로 풀어 설명하는 것은 약점.
-
-### 4. Explore → Plan → Code 패턴
-
-큰 변경 전에 Plan Mode/brainstorming으로 설계를 먼저 요청했는지, 승인 후 구현했는지. 큰 리팩토링·신규 기능을 설계 없이 바로 구현 요청하거나, 반대로 사소한 작업에도 과도하게 계획을 요청하는 것은 약점.
-
-### 5. Claude에게 인터뷰 요청
-
-규모 있는 기능 착수 시 `AskUserQuestion` 도구로 인터뷰 요청을 했는지. 불완전한 요구사항을 그대로 던지고 구현 중간에 재설명하는 것은 약점.
-
-### 6. 빠른 교정
-
-잘못된 방향을 발견하고 즉시 되돌렸는지 (`Esc`, `Esc Esc`, "undo that", `/clear`). **선택지 메뉴에서 옵션을 고른 것은 교정이 아니다** — 이 오판은 흔하므로 주의한다. 같은 교정을 반복하거나 방치한 것은 약점.
-
-### 7. 세션 관리
-
-무관한 작업 사이 `/clear`를 썼는지, 조사를 subagent로 위임했는지. 완전히 다른 주제가 한 세션에 혼재한 것은 약점.
-
-각 기준의 ✅/⚠️/❌를 리포트에 나열하지 않는다. 이 렌즈로 진단한 결과는 아래 보고서 형식의 3섹션 안에서 **증거 기반 문장**으로만 드러낸다.
+6. Notify the save result in one line.
 
 ---
 
-## 보고서 형식
+## Evaluation philosophy
 
-아래 3섹션 구조를 따른다. 별점·7축 섹션 나열·"평가 결과는 참고용" 꼬리 문장은 포함하지 않는다.
+- **Do not fill every axis every time.** Use only the evidence that exists in this session. Axes with no supporting case do not appear in the report.
+- **A report's value comes from density, not length.** Every sentence must be grounded in a quotable prompt from the session, or be a sentence the user can paste directly into their next session.
+- **The ultimate utility of the report = its ability to make the user behave differently in the next session.** It is an immediately-actionable prescription, not a contemplative retrospective.
+
+## Anti-inflation guardrails
+
+While writing the report, **strictly** follow the 6 rules below.
+
+1. **Evidence principle**: Every item (praise or critique) must be grounded in a quotable prompt/turn from the session. Do not write items without citations.
+
+2. **No hedging phrasing**: Do not use phrases like "this effectively amounts to ~", "can be seen as ~", "equivalent to ~" that force-fit a case. If the case doesn't exist, don't write that item at all.
+
+3. **No intent inference**: Do not praise by guessing the user's internal motivation, knowledge, or intent. For example, phrases like "*mindful of* PR guidelines", "*referencing* CLAUDE.md" are unobservable claims and forbidden. Base everything on observable prompt text only.
+
+4. **Bias calibration**: If the "What worked" section is longer or has more items than "What didn't work", reconsider. The default stance is "there is always something to improve." Even when a session is genuinely excellent, point out at least 1 strong item in "What didn't work".
+
+5. **Sample guard**: If the prompt count is fewer than 3, output only 1 "What didn't work" item + 1 "Next-session template" and close with "Deep diagnosis omitted due to insufficient sample." Do not force 3 sections.
+
+6. **Self-bias caution**: When evaluating sessions that develop or meta-handle this evaluation tool or skill itself, apply the rules especially strictly. The temptation to praise meta work is strong. For the same evidence, view it one level more critically than a normal session.
+
+## Internal evaluation lens (not output)
+
+The 7 criteria below are a **checklist you run internally while reading the prompts**. Do not surface them as section titles in the report. Source: [Claude Code Best Practices](https://code.claude.com/docs/en/best-practices).
+
+### 1. Give Claude ways to verify its own output
+
+Whether the prompt includes success criteria, test cases, screenshots, or "this is what success looks like" conditions. Requests like "fix this", "make it better" with no way to verify are weaknesses.
+
+### 2. Provide concrete context in the prompt
+
+Whether filenames, component names, line numbers, and reproduction steps are specified. Requests with unbounded exploration scope like "fix the sidebar" are weaknesses. However, intentionally ambiguous prompts may be useful during exploration phases.
+
+### 3. Use rich context-delivery mechanisms
+
+Whether `@` file references, pasting errors/logs, screenshots, and relevant document URLs are used. Asking Claude to search, or paraphrasing errors into prose, are weaknesses.
+
+### 4. Explore → Plan → Code pattern
+
+Whether Plan Mode / brainstorming was requested for design before big changes and implementation followed approval. Requesting implementation of large refactors or new features without design, or conversely over-requesting plans for trivial work, are weaknesses.
+
+### 5. Ask Claude to interview you
+
+Whether the `AskUserQuestion` tool was invoked for interviewing at the start of a sizable feature. Throwing incomplete requirements as-is and re-explaining mid-implementation is a weakness.
+
+### 6. Quick correction
+
+Whether wrong directions were caught and reverted immediately (`Esc`, `Esc Esc`, "undo that", `/clear`). **Picking an option from a menu is not correction** — this misjudgment is common, so watch for it. Repeating the same correction or letting errors persist are weaknesses.
+
+### 7. Session management
+
+Whether `/clear` was used between unrelated tasks, and whether investigation was delegated to a subagent. Having completely different topics mixed in one session is a weakness.
+
+Do not list ✅/⚠️/❌ for each criterion in the report. The diagnosis from this lens surfaces **only as evidence-based sentences** within the 3 report sections below.
+
+---
+
+## Report format
+
+Follow the 3-section structure below. Do not include star ratings, per-axis section listings, or trailing sentences like "the evaluation result is for reference only".
 
 ```markdown
-## 프롬프트 품질 평가 — [한 줄 세션 요약]
+## Prompt quality evaluation — [one-line session summary]
 
-**세션:** [무엇을 했는지 1문장]
-**프롬프트 수:** N개
+**Session:** [1-sentence description of what was done]
+**Prompt count:** N
 
 ---
 
-### 이 세션에서 작동한 것
-- **[행동명]:** "세션 프롬프트 인용" → [왜 효과적이었는지 한 줄]
-- (1~3개, 개수 상한 3)
+### What worked in this session
+- **[Action name]:** "session prompt quotation" → [one-line reason why it was effective]
+- (1–3 items, cap 3)
 
-### 이 세션에서 작동하지 않은 것
+### What didn't work in this session
 
-**반복 패턴 진단** (1~2개)
-- **[패턴명 — 5~10자]**
-  - **관찰:** 같은 약점이 2회 이상 나타난 인용 2~3개
-  - **추정 원인:** 1줄 가설 ("추정"임을 명시)
-  - **영향:** 왕복 횟수 / 재작업 범위 / 잘못된 방향 진입 등 구체 비용
+**Repeating-pattern diagnosis** (1–2 items)
+- **[Pattern name — 5–10 chars]**
+  - **Observation:** 2–3 citations where the same weakness appears 2+ times
+  - **Presumed cause:** 1-line hypothesis (mark as "presumed")
+  - **Impact:** concrete cost such as round-trip count / rework scope / wrong-direction entry
 
-**Before → After 리라이트** (2~3개)
-- **Before:** "실제로 쓴 프롬프트 인용 (필요시 …로 축약)"
-- **After:** "Before를 최소한으로 수정한 더 강한 버전"
-- **왜:** 한 줄 근거
+**Before → After rewrites** (2–3 items)
+- **Before:** "actual prompt quotation (abbreviate with … if needed)"
+- **After:** "a stronger version with the minimum edit to Before"
+- **Why:** one-line reasoning
 
-### 다음 세션용 문장 템플릿
-- `복붙 가능한 한 줄 프롬프트` — [언제 쓰는지 한 줄]
-- (2~3개, 각 템플릿은 위에서 진단된 약점과 1:1 매핑)
+### Next-session sentence templates
+- `one-line prompt ready to paste` — [one-line note on when to use]
+- (2–3 items, each template maps 1:1 to a weakness diagnosed above)
 ```
 
-### 각 재료의 작성 규칙
+### Writing rules for each ingredient
 
-**① 작동한 것**
+**① What worked**
 
-- 항목 형식 고정: `- **[행동명]:** "인용" → [효과 한 줄]`
-- "일관되게", "정확히", "모범적으로" 류 부사 남발 금지. 관찰된 사실만.
-- 개수 상한 3개. 넘치면 가장 약한 항목을 버린다.
+- Item format fixed: `- **[Action name]:** "quotation" → [one-line effect]`
+- Do not overuse adverbs like "consistently", "precisely", "exemplarily". Observed facts only.
+- Cap 3 items. Drop the weakest when exceeding.
 
-**② 반복 패턴 진단**
+**② Repeating-pattern diagnosis**
 
-- "반복"의 정의: 세션 내 **같은 약점이 2회 이상** 관찰. 1회짜리는 여기가 아니라 ③의 재료로 돌린다.
-- 영향 기술은 구체 비용으로만 — 왕복 횟수, 재작업 범위, 컨텍스트 오염, 잘못된 방향 진입. "비효율적이다" 같은 추상 평가 금지.
-- 패턴이 1개만 발견되면 1개만 쓴다. 2개를 억지로 채우지 않는다.
+- Definition of "repeating": **the same weakness observed 2+ times** within the session. Single-occurrence cases are routed to ③ instead.
+- Describe impact only as concrete cost — round-trip count, rework scope, context pollution, wrong-direction entry. Forbid abstract evaluations like "inefficient."
+- If only 1 pattern is found, write only 1. Do not force 2 for volume.
 
-**③ Before → After 리라이트**
+**③ Before → After rewrites**
 
-- After는 Before를 **최소한으로 수정**한 형태여야 한다. 완전히 다른 프롬프트로 갈아치우지 않는다. 사용자가 "이 한 줄만 추가하면 되는구나"를 느껴야 체화된다.
-- 반드시 ②의 패턴과 연결되는 리라이트를 **1개 이상 포함**한다.
-- ①에서 칭찬한 프롬프트는 리라이트 대상에서 제외한다.
+- After must be the **minimum edit** to Before. Do not replace the prompt with a completely different one. The user needs to feel "just add this one line" so it becomes habitual.
+- Must include **at least 1** rewrite connected to the pattern in ②.
+- Prompts praised in ① are excluded from rewrite targets.
 
-**③b 다음 세션용 문장 템플릿**
+**③b Next-session sentence templates**
 
-- 항목 형식: `` `템플릿 한 줄` — [언제 쓰는지 한 줄] ``
-- 각 템플릿은 위에서 진단된 약점과 **1:1 매핑**된다. 매핑되지 않는 일반론 금지.
-- 구체 파일/에러 메시지 자리는 `[...]` 플레이스홀더로 남긴다.
+- Item format: `` `one-line template` — [one-line note on when to use] ``
+- Each template must be a **1:1 mapping** to a weakness diagnosed above. Forbid general advice without a mapping.
+- Leave specific file/error message slots as `[...]` placeholders.
 
 ---
 
-## 예시 리포트
+## Example report
 
-아래는 가상 세션(결제 API 버그 수정) 기반 예시다. 포맷 안정성을 위한 참고용이며, 실제 리포트는 **이 예시를 모방하지 말고** 평가 대상 세션의 고유한 증거로 작성한다.
+Below is an example based on a fictional session (fixing a payment API bug). It is reference-only for format stability — actual reports must **not imitate this example** but be written with the evidence unique to the session being evaluated.
 
 ```markdown
-## 프롬프트 품질 평가 — 결제 API 500 에러 원인 추적 및 수정
+## Prompt quality evaluation — Root-cause tracing and fix of payment API 500 errors
 
-**세션:** 결제 생성 API에서 간헐 500이 나는 이슈를 원인 파악 → 재현 테스트 → 수정 → 머지까지 진행한 세션
-**프롬프트 수:** 11개
+**Session:** A session that took intermittent 500 errors from the payment creation API through root-cause analysis → reproduction test → fix → merge
+**Prompt count:** 11
 
 ---
 
-### 이 세션에서 작동한 것
-- **에러 원문 전달:** "스택 트레이스 전체 붙여넣음(PaymentService.kt:87 ...)" → 말로 풀지 않고 로그 원문을 그대로 주어 근본 원인 추정 왕복 1회에 종료.
-- **파일 직접 참조:** "`@src/payment/PaymentService.kt` 이 파일의 retry 로직 확인해줘" → `@` 참조로 탐색 범위를 좁혀 Claude가 추측 없이 바로 코드를 읽음.
+### What worked in this session
+- **Raw error delivery:** "Pasted full stack trace (PaymentService.kt:87 ...)" → giving the log verbatim instead of paraphrasing ended root-cause guessing in 1 round trip.
+- **Direct file reference:** "`@src/payment/PaymentService.kt` check the retry logic in this file" → narrowed search scope via `@` reference so Claude read code directly without guessing.
 
-### 이 세션에서 작동하지 않은 것
+### What didn't work in this session
 
-**반복 패턴 진단**
+**Repeating-pattern diagnosis**
 
-- **검증 기준 공란**
-  - **관찰:** "고쳐줘" (3번째 턴), "이 부분 수정해줘" (7번째 턴) — 두 번 모두 "성공 조건"이나 "테스트 케이스"가 빠짐.
-  - **추정 원인:** 에러 원문을 명확히 전달한 것에 만족해 검증 단계를 암묵적으로 위임.
-  - **영향:** Claude가 임시 패치를 제시하는 바람에 "테스트부터 돌려줘" 재요청이 필요해 왕복 2회 추가 발생.
+- **Blank verification criteria**
+  - **Observation:** "fix it" (turn 3), "fix this part" (turn 7) — both times "success condition" or "test case" was missing.
+  - **Presumed cause:** Satisfied with precisely delivering the error message, the verification step was implicitly delegated.
+  - **Impact:** Claude proposed a temporary patch, requiring a "run tests first" re-request that added 2 more round trips.
 
-**Before → After 리라이트**
+**Before → After rewrites**
 
-- **Before:** "retry 로직 고쳐줘"
-- **After:** "retry 로직 고쳐줘. 실패 재현 테스트를 먼저 작성하고, 고친 뒤 그 테스트가 통과하는지 확인해줘."
-- **왜:** 검증 기준(실패 테스트 → 통과)을 프롬프트에 박아 왕복 2회 제거.
+- **Before:** "fix the retry logic"
+- **After:** "Fix the retry logic. First write a failure-reproduction test, then after fixing confirm that the test passes."
+- **Why:** Baking verification criteria (failing test → passing) into the prompt removes 2 round trips.
 
-- **Before:** "이 쪽 수정해줘"
-- **After:** "이 쪽 수정해줘. `./gradlew test --tests PaymentServiceTest` 통과까지 검증해줘."
-- **왜:** 수정 검증을 Claude의 루프 안에 포함시켜 "빌드 돌려봐" 재프롬프트 제거.
+- **Before:** "fix this side"
+- **After:** "Fix this side. Verify through `./gradlew test --tests PaymentServiceTest` passing."
+- **Why:** Including verification inside Claude's loop removes the "run the build" re-prompt.
 
-### 다음 세션용 문장 템플릿
-- `[파일/모듈] 수정해줘. 실패를 재현하는 테스트를 먼저 작성하고, 고친 뒤 그 테스트가 통과하는지 확인해줘.` — 버그 수정 지시 시
-- `수정 후 [검증 명령]까지 통과하는지 확인하고, 실패하면 로그를 붙여 원인을 파악해줘.` — 모든 구현 지시의 마지막 줄로 붙임
+### Next-session sentence templates
+- `Fix [file/module]. First write a test that reproduces the failure, then after fixing confirm it passes.` — when instructing a bug fix
+- `After fixing, verify that [verification command] passes; if it fails, paste the log and trace the cause.` — append as the last line of every implementation instruction
 ```
 
-예시 끝. 실제 리포트는 이 예시의 구조만 차용하고, 내용은 평가 대상 세션의 고유한 증거로 채운다.
+End of example. Actual reports adopt only the structure of this example, and fill the content with evidence unique to the session being evaluated.
