@@ -167,14 +167,34 @@ try {
 }
 '@
 
+    $ReferenceFile = ".claude/aiflare_settings.reference.json"
+    $MergeScript = Join-Path $CloneDir "scripts/merge-hooks.js"
+
     if (-not (Test-Path $SettingsFile)) {
         Set-Content -Path $SettingsFile -Value $HooksContent -Encoding UTF8
         Write-Info "Hooks config created -> $SettingsFile"
+    } elseif ((Get-Command node -ErrorAction SilentlyContinue) -and (Test-Path $MergeScript)) {
+        $HooksTempFile = Join-Path $TempDir "aiflare_settings.json"
+        Set-Content -Path $HooksTempFile -Value $HooksContent -Encoding UTF8
+        Copy-Item -Path $SettingsFile -Destination "$SettingsFile.bak" -Force
+        try {
+            node $MergeScript $SettingsFile $HooksTempFile
+            if ($LASTEXITCODE -eq 0) {
+                Write-Info "Hooks merged -> $SettingsFile (backup: $SettingsFile.bak)"
+            } else {
+                throw "merge-hooks.js exited with code $LASTEXITCODE"
+            }
+        } catch {
+            Move-Item -Path "$SettingsFile.bak" -Destination $SettingsFile -Force
+            Write-Warn "Hook merge failed. Original $SettingsFile restored."
+            Set-Content -Path $ReferenceFile -Value $HooksContent -Encoding UTF8
+            Write-Host "  Reference saved to $ReferenceFile for manual merge."
+        }
     } else {
-        Write-Warn "Existing $SettingsFile found. Please add hooks manually."
-        Write-Host ""
-        Write-Host "  The hooks content to merge is shown above in the script source."
-        Write-Host "  Or re-run this installer after removing the existing file."
+        Set-Content -Path $ReferenceFile -Value $HooksContent -Encoding UTF8
+        Write-Warn "node not found. Cannot auto-merge hooks into existing $SettingsFile."
+        Write-Host "  Reference saved to $ReferenceFile."
+        Write-Host "  Please merge its `"hooks`" section into $SettingsFile manually."
     }
 
     # --- 5. Create .mcp.json ---

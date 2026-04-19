@@ -84,26 +84,31 @@ fi
 # --- 4. Install settings.local.json (hooks) ---
 SETTINGS_FILE=".claude/settings.local.json"
 HOOKS_SOURCE="$CLONE_DIR/aiflare_settings.json"
+MERGE_SCRIPT="$CLONE_DIR/scripts/merge-hooks.js"
+REFERENCE_FILE=".claude/aiflare_settings.reference.json"
 
 mkdir -p .claude
 
 if [[ ! -f "$HOOKS_SOURCE" ]]; then
-  warn "Hooks source file not found in repository: settings.json"
+  warn "Hooks source file not found in repository: aiflare_settings.json"
 elif [[ ! -f "$SETTINGS_FILE" ]]; then
   cp "$HOOKS_SOURCE" "$SETTINGS_FILE"
   info "Hooks config created → $SETTINGS_FILE"
+elif command -v node &>/dev/null && [[ -f "$MERGE_SCRIPT" ]]; then
+  cp "$SETTINGS_FILE" "$SETTINGS_FILE.bak"
+  if node "$MERGE_SCRIPT" "$SETTINGS_FILE" "$HOOKS_SOURCE"; then
+    info "Hooks merged → $SETTINGS_FILE (backup: $SETTINGS_FILE.bak)"
+  else
+    mv "$SETTINGS_FILE.bak" "$SETTINGS_FILE"
+    warn "Hook merge failed. Original $SETTINGS_FILE restored."
+    cp "$HOOKS_SOURCE" "$REFERENCE_FILE"
+    echo "  Reference saved to $REFERENCE_FILE for manual merge."
+  fi
 else
-  warn "Existing $SETTINGS_FILE found. Please add hooks manually."
-  echo ""
-  echo "  Open $SETTINGS_FILE and add the following events inside the \"hooks\" object."
-  echo "  If there is no \"hooks\" key, create one at the top level: \"hooks\": { ... }"
-  echo ""
-  echo "  Reference hook definitions:"
-  echo "    $HOOKS_SOURCE"
-  echo ""
-  echo "  Events to merge:"
-  echo "    SessionStart, PostToolUse, UserPromptSubmit, Stop,"
-  echo "    SessionEnd, TaskCreated, TaskCompleted"
+  cp "$HOOKS_SOURCE" "$REFERENCE_FILE"
+  warn "node not found. Cannot auto-merge hooks into existing $SETTINGS_FILE."
+  echo "  Reference saved to $REFERENCE_FILE."
+  echo "  Please merge its \"hooks\" section into $SETTINGS_FILE manually."
 fi
 
 # --- 5. Create .mcp.json ---
