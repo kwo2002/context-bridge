@@ -4,14 +4,14 @@ export async function handleGetSessionSummary(apiClient, args) {
 }
 function formatSessionSummary(data) {
     const lines = [];
-    lines.push(`## 세션 요약: ${data.sessionName}`);
-    lines.push(`- **세션 ID:** ${data.sessionId}`);
-    lines.push(`- **시작 시각:** ${data.startedAt}`);
-    lines.push(`- **총 커밋 수:** ${data.summary.totalCommits}`);
-    lines.push(`- **변경 파일:** ${data.summary.changedFiles.join(", ")}`);
+    lines.push(`## Session Summary: ${data.sessionName}`);
+    lines.push(`- **Session ID:** ${data.sessionId}`);
+    lines.push(`- **Started at:** ${data.startedAt}`);
+    lines.push(`- **Total commits:** ${data.summary.totalCommits}`);
+    lines.push(`- **Changed files:** ${data.summary.changedFiles.join(", ")}`);
     const tagEntries = Object.entries(data.summary.tagBreakdown);
     if (tagEntries.length > 0) {
-        lines.push(`- **태그 분류:** ${tagEntries.map(([tag, count]) => `${tag}(${count})`).join(", ")}`);
+        lines.push(`- **Tag breakdown:** ${tagEntries.map(([tag, count]) => `${tag}(${count})`).join(", ")}`);
     }
     lines.push("");
     for (const entry of data.entries) {

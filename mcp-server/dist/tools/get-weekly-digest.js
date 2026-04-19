@@ -4,44 +4,44 @@ export async function handleGetWeeklyDigest(apiClient, args) {
 }
 function formatWeeklyDigest(data) {
     const lines = [];
-    lines.push(`# 주간 다이제스트: ${data.week} (${data.startDate} ~ ${data.endDate})`);
+    lines.push(`# Weekly Digest: ${data.week} (${data.startDate} ~ ${data.endDate})`);
     lines.push("");
-    lines.push("## 팀 요약");
-    lines.push(`- 커밋: ${data.teamStats.totalCommits}건 | 세션: ${data.teamStats.totalSessions}개 | 참여자: ${data.teamStats.activeMemberCount}명`);
-    lines.push(`- 변경 파일: ${data.teamStats.totalChangedFiles}개`);
+    lines.push("## Team Summary");
+    lines.push(`- Commits: ${data.teamStats.totalCommits} | Sessions: ${data.teamStats.totalSessions} | Active members: ${data.teamStats.activeMemberCount}`);
+    lines.push(`- Changed files: ${data.teamStats.totalChangedFiles}`);
     const tagEntries = Object.entries(data.teamStats.tagBreakdown);
     if (tagEntries.length > 0) {
-        lines.push(`- 태그: ${tagEntries.map(([tag, count]) => `${tag} ${count}`).join(", ")}`);
+        lines.push(`- Tags: ${tagEntries.map(([tag, count]) => `${tag} ${count}`).join(", ")}`);
     }
     lines.push("");
     if (data.keyDecisions.length > 0) {
-        lines.push("## 이번 주 핵심 의사결정");
+        lines.push("## Key Decisions This Week");
         data.keyDecisions.forEach((decision, i) => {
             lines.push(`### ${i + 1}. [${decision.tag}] ${decision.title} — ${decision.userName}`);
-            lines.push(`- **의도**: ${decision.intent}`);
-            lines.push(`- **기각한 대안**: ${decision.alternatives}`);
-            lines.push(`- 세션: ${decision.sessionName} | 커밋: ${decision.commitHash.substring(0, 7)}`);
+            lines.push(`- **Intent**: ${decision.intent}`);
+            lines.push(`- **Rejected alternatives**: ${decision.alternatives}`);
+            lines.push(`- Session: ${decision.sessionName} | Commit: ${decision.commitHash.substring(0, 7)}`);
             lines.push("");
         });
     }
     if (data.memberDigests.length > 0) {
-        lines.push("## 팀원별 작업 내역");
+        lines.push("## Per-Member Work Log");
         for (const member of data.memberDigests) {
-            lines.push(`### ${member.userName} (세션 ${member.stats.sessions}개, 커밋 ${member.stats.commits}건)`);
+            lines.push(`### ${member.userName} (${member.stats.sessions} sessions, ${member.stats.commits} commits)`);
             for (const session of member.sessions) {
                 const files = session.changedFiles.slice(0, 5).join(", ");
-                lines.push(`- **${session.sessionName}** (${session.date.substring(0, 10)}): 커밋 ${session.commitCount}건, 파일: ${files}`);
+                lines.push(`- **${session.sessionName}** (${session.date.substring(0, 10)}): ${session.commitCount} commits, files: ${files}`);
             }
             if (member.topChangedFiles.length > 0) {
-                lines.push(`- 주요 변경 파일: ${member.topChangedFiles.join(", ")}`);
+                lines.push(`- Top changed files: ${member.topChangedFiles.join(", ")}`);
             }
             lines.push("");
         }
     }
     if (data.mostChangedFiles.length > 0) {
-        lines.push("## 가장 많이 변경된 파일 (Top 10)");
-        lines.push("| 파일 | 변경 횟수 | 관련 태그 |");
-        lines.push("|------|-----------|-----------|");
+        lines.push("## Most Changed Files (Top 10)");
+        lines.push("| File | Change count | Related tags |");
+        lines.push("|------|--------------|--------------|");
         for (const file of data.mostChangedFiles) {
             lines.push(`| ${file.file} | ${file.changeCount} | ${file.tags.join(", ")} |`);
         }

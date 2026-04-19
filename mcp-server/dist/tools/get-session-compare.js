@@ -4,38 +4,38 @@ export async function handleGetSessionCompare(apiClient, args) {
 }
 function formatSessionCompare(data) {
     const lines = [];
-    lines.push("## 세션 비교 결과");
+    lines.push("## Session Compare Result");
     lines.push("");
-    lines.push(`### 세션 1: ${data.session1.sessionName}`);
-    lines.push(`- **세션 ID:** ${data.session1.sessionId}`);
-    lines.push(`- **날짜:** ${data.session1.date}`);
-    lines.push(`- **커밋 수:** ${data.session1.commits}`);
-    lines.push(`- **태그:** ${Object.entries(data.session1.tags).map(([t, c]) => `${t}(${c})`).join(", ")}`);
-    lines.push(`- **변경 파일:** ${data.session1.changedFiles.join(", ")}`);
+    lines.push(`### Session 1: ${data.session1.sessionName}`);
+    lines.push(`- **Session ID:** ${data.session1.sessionId}`);
+    lines.push(`- **Date:** ${data.session1.date}`);
+    lines.push(`- **Commits:** ${data.session1.commits}`);
+    lines.push(`- **Tags:** ${Object.entries(data.session1.tags).map(([t, c]) => `${t}(${c})`).join(", ")}`);
+    lines.push(`- **Changed files:** ${data.session1.changedFiles.join(", ")}`);
     if (data.session1.keyDecisions.length > 0) {
-        lines.push(`- **주요 의사결정:**`);
+        lines.push(`- **Key decisions:**`);
         for (const d of data.session1.keyDecisions) {
             lines.push(`  - ${d}`);
         }
     }
     lines.push("");
-    lines.push(`### 세션 2: ${data.session2.sessionName}`);
-    lines.push(`- **세션 ID:** ${data.session2.sessionId}`);
-    lines.push(`- **날짜:** ${data.session2.date}`);
-    lines.push(`- **커밋 수:** ${data.session2.commits}`);
-    lines.push(`- **태그:** ${Object.entries(data.session2.tags).map(([t, c]) => `${t}(${c})`).join(", ")}`);
-    lines.push(`- **변경 파일:** ${data.session2.changedFiles.join(", ")}`);
+    lines.push(`### Session 2: ${data.session2.sessionName}`);
+    lines.push(`- **Session ID:** ${data.session2.sessionId}`);
+    lines.push(`- **Date:** ${data.session2.date}`);
+    lines.push(`- **Commits:** ${data.session2.commits}`);
+    lines.push(`- **Tags:** ${Object.entries(data.session2.tags).map(([t, c]) => `${t}(${c})`).join(", ")}`);
+    lines.push(`- **Changed files:** ${data.session2.changedFiles.join(", ")}`);
     if (data.session2.keyDecisions.length > 0) {
-        lines.push(`- **주요 의사결정:**`);
+        lines.push(`- **Key decisions:**`);
         for (const d of data.session2.keyDecisions) {
             lines.push(`  - ${d}`);
         }
     }
     lines.push("");
-    lines.push("### 비교 분석");
-    lines.push(`- **공통 변경 파일:** ${data.comparison.overlappingFiles.length > 0 ? data.comparison.overlappingFiles.join(", ") : "없음"}`);
-    lines.push(`- **세션 2 신규 파일:** ${data.comparison.newFilesInSession2.length > 0 ? data.comparison.newFilesInSession2.join(", ") : "없음"}`);
-    lines.push(`- **연속 작업:** ${data.comparison.continuedWork ? "예" : "아니오"}`);
-    lines.push(`- **태그 변화:** ${data.comparison.tagShift}`);
+    lines.push("### Comparison Analysis");
+    lines.push(`- **Overlapping changed files:** ${data.comparison.overlappingFiles.length > 0 ? data.comparison.overlappingFiles.join(", ") : "none"}`);
+    lines.push(`- **New files in Session 2:** ${data.comparison.newFilesInSession2.length > 0 ? data.comparison.newFilesInSession2.join(", ") : "none"}`);
+    lines.push(`- **Continued work:** ${data.comparison.continuedWork ? "yes" : "no"}`);
+    lines.push(`- **Tag shift:** ${data.comparison.tagShift}`);
     return lines.join("\n");
 }
