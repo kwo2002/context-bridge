@@ -3,14 +3,28 @@
 
 $ErrorActionPreference = "Stop"
 
-function Write-Info  { param([string]$Msg) Write-Host "[OK] $Msg" -ForegroundColor Green }
-function Write-Warn  { param([string]$Msg) Write-Host "[!] $Msg" -ForegroundColor Yellow }
-function Write-Err   { param([string]$Msg) Write-Host "[X] $Msg" -ForegroundColor Red }
+# Disable colors when stdout is redirected (piped to file, iex, etc.)
+$UseColor = -not [Console]::IsOutputRedirected
 
-# --- Check git installation ---
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Err "git is not installed. Please install Git for Windows first."
-    exit 1
+function Write-Info    { param([string]$Msg)
+    if ($UseColor) { Write-Host "[OK] $Msg" -ForegroundColor Green } else { Write-Host "[OK] $Msg" }
+}
+function Write-Success { param([string]$Msg)
+    if ($UseColor) { Write-Host "[OK] $Msg" -ForegroundColor Green -BackgroundColor Black } else { Write-Host "[OK] $Msg" }
+}
+function Write-Warn    { param([string]$Msg)
+    if ($UseColor) { Write-Host "[!] $Msg" -ForegroundColor Yellow } else { Write-Host "[!] $Msg" }
+}
+function Write-Err     { param([string]$Msg)
+    if ($UseColor) { Write-Host "[X] $Msg" -ForegroundColor Red } else { Write-Host "[X] $Msg" }
+}
+
+# --- Check required dependencies ---
+foreach ($cmd in @("git", "node")) {
+    if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
+        Write-Err "$cmd is required but not installed. Please install $cmd and try again."
+        exit 1
+    }
 }
 
 # --- Detect git root ---
@@ -197,10 +211,11 @@ try {
         Write-Host "  Please merge its `"hooks`" section into $SettingsFile manually."
     }
 
-    # --- 5. Create .mcp.json ---
+    # --- 5. Install/merge .mcp.json ---
     $McpJson = ".mcp.json"
-    if (-not (Test-Path $McpJson)) {
-        $McpJsonContent = @'
+    $MergeMcpScript = Join-Path $CloneDir "scripts/merge-mcp.js"
+    $McpReferenceFile = ".claude/mcp.reference.json"
+    $McpJsonContent = @'
 {
   "mcpServers": {
     "aiflare": {
@@ -210,14 +225,32 @@ try {
   }
 }
 '@
+
+    if (-not (Test-Path $McpJson)) {
         Set-Content -Path $McpJson -Value $McpJsonContent -Encoding UTF8
         Write-Info "MCP config created -> $McpJson"
-    } else {
-        if (-not (Select-String -Path $McpJson -Pattern "aiflare" -Quiet)) {
-            Write-Warn "Existing $McpJson found. Please add aiflare MCP server manually."
-        } else {
-            Write-Info "aiflare already configured in $McpJson"
+    } elseif (Test-Path $MergeMcpScript) {
+        $McpSrcTmp = Join-Path $TempDir "mcp-aiflare.json"
+        Set-Content -Path $McpSrcTmp -Value $McpJsonContent -Encoding UTF8
+        Copy-Item -Path $McpJson -Destination "$McpJson.bak" -Force
+        try {
+            node $MergeMcpScript $McpJson $McpSrcTmp
+            if ($LASTEXITCODE -eq 0) {
+                Write-Info "MCP config merged -> $McpJson (backup: $McpJson.bak)"
+            } else {
+                throw "merge-mcp.js exited with code $LASTEXITCODE"
+            }
+        } catch {
+            Move-Item -Path "$McpJson.bak" -Destination $McpJson -Force
+            Write-Warn "MCP config merge failed. Original $McpJson restored."
+            Set-Content -Path $McpReferenceFile -Value $McpJsonContent -Encoding UTF8
+            Write-Host "  Reference saved to $McpReferenceFile for manual merge."
         }
+    } else {
+        Set-Content -Path $McpReferenceFile -Value $McpJsonContent -Encoding UTF8
+        Write-Warn "Merge script unavailable. Cannot update existing $McpJson."
+        Write-Host "  Reference saved to $McpReferenceFile."
+        Write-Host "  Please add the `"aiflare`" entry to $McpJson manually."
     }
 
     # --- 6. Update .gitignore ---
@@ -274,10 +307,56 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "`$(git rev-parse --show
         Write-Info "context-capture directive already exists in CLAUDE.md"
     }
 
+    # --- 9. Post-install verification ---
+    Write-Host ""
+    Write-Info "Verifying installation..."
+
+    $verifyFailed = $false
+
+    Get-ChildItem -Path $SkillsTarget -Directory | ForEach-Object {
+        $skillMdPath = Join-Path $_.FullName "SKILL.md"
+        if (-not (Test-Path $skillMdPath)) {
+            Write-Warn "Skill missing SKILL.md: $($_.Name)"
+            $verifyFailed = $true
+        }
+    }
+
+    if (Test-Path $McpTarget) {
+        $McpEntry = Join-Path $McpTarget "dist/index.js"
+        if (-not (Test-Path $McpEntry)) {
+            Write-Warn "MCP server entry point missing: $McpEntry"
+            $verifyFailed = $true
+        } else {
+            try {
+                node --check $McpEntry 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Warn "MCP server entry point failed syntax check: $McpEntry"
+                    $verifyFailed = $true
+                }
+            } catch {
+                Write-Warn "MCP server entry point failed syntax check: $McpEntry"
+                $verifyFailed = $true
+            }
+        }
+    }
+
+    if (Test-Path $McpJson) {
+        try {
+            Get-Content $McpJson -Raw | ConvertFrom-Json | Out-Null
+        } catch {
+            Write-Warn "$McpJson is not valid JSON"
+            $verifyFailed = $true
+        }
+    }
+
+    if (-not $verifyFailed) {
+        Write-Info "All components verified"
+    }
+
     # --- Done ---
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Info "Installation complete!"
+    Write-Success "Installation complete!"
     Write-Host ""
     Write-Host "  Next steps:"
     Write-Host "  1. Go to AIFlare project settings -> API Key Management and generate an API key"

@@ -4,21 +4,33 @@
 
 set -euo pipefail
 
-# --- Colors ---
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-RED='\033[0;31m'
-NC='\033[0m'
-
-info()  { echo -e "${GREEN}✓${NC} $1"; }
-warn()  { echo -e "${YELLOW}!${NC} $1"; }
-error() { echo -e "${RED}✗${NC} $1" >&2; }
-
-# --- Check git installation ---
-if ! command -v git &>/dev/null; then
-  error "git is not installed. Please install git first."
-  exit 1
+# --- Colors (disabled when stdout is not a TTY) ---
+if [[ -t 1 ]]; then
+  GREEN='\033[0;32m'
+  YELLOW='\033[0;33m'
+  RED='\033[0;31m'
+  BOLD='\033[1m'
+  NC='\033[0m'
+else
+  GREEN=''
+  YELLOW=''
+  RED=''
+  BOLD=''
+  NC=''
 fi
+
+info()    { echo -e "${GREEN}✓${NC} $1"; }
+success() { echo -e "${GREEN}${BOLD}✓ $1${NC}"; }
+warn()    { echo -e "${YELLOW}!${NC} $1"; }
+error()   { echo -e "${RED}✗${NC} $1" >&2; }
+
+# --- Check required dependencies ---
+for cmd in git node; do
+  if ! command -v "$cmd" &>/dev/null; then
+    error "$cmd is required but not installed. Please install $cmd and try again."
+    exit 1
+  fi
+done
 
 # --- Detect git root ---
 GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
@@ -111,17 +123,40 @@ else
   echo "  Please merge its \"hooks\" section into $SETTINGS_FILE manually."
 fi
 
-# --- 5. Create .mcp.json ---
+# --- 5. Install/merge .mcp.json ---
 MCP_JSON=".mcp.json"
+MERGE_MCP_SCRIPT="$CLONE_DIR/scripts/merge-mcp.js"
+MCP_REFERENCE_FILE=".claude/mcp.reference.json"
+
+MCP_CONFIG_JSON='{
+  "mcpServers": {
+    "aiflare": {
+      "command": "node",
+      "args": [".claude/mcp-server/dist/index.js"]
+    }
+  }
+}'
+
 if [[ ! -f "$MCP_JSON" ]]; then
-  printf '{\n  "mcpServers": {\n    "aiflare": {\n      "command": "node",\n      "args": [".claude/mcp-server/dist/index.js"]\n    }\n  }\n}\n' > "$MCP_JSON"
+  printf '%s\n' "$MCP_CONFIG_JSON" > "$MCP_JSON"
   info "MCP config created → $MCP_JSON"
-else
-  if ! grep -q 'aiflare' "$MCP_JSON" 2>/dev/null; then
-    warn "Existing $MCP_JSON found. Please add aiflare MCP server manually."
+elif [[ -f "$MERGE_MCP_SCRIPT" ]]; then
+  MCP_SRC_TMP="$TEMP_DIR/mcp-aiflare.json"
+  printf '%s\n' "$MCP_CONFIG_JSON" > "$MCP_SRC_TMP"
+  cp "$MCP_JSON" "$MCP_JSON.bak"
+  if node "$MERGE_MCP_SCRIPT" "$MCP_JSON" "$MCP_SRC_TMP"; then
+    info "MCP config merged → $MCP_JSON (backup: $MCP_JSON.bak)"
   else
-    info "aiflare already configured in $MCP_JSON"
+    mv "$MCP_JSON.bak" "$MCP_JSON"
+    warn "MCP config merge failed. Original $MCP_JSON restored."
+    printf '%s\n' "$MCP_CONFIG_JSON" > "$MCP_REFERENCE_FILE"
+    echo "  Reference saved to $MCP_REFERENCE_FILE for manual merge."
   fi
+else
+  printf '%s\n' "$MCP_CONFIG_JSON" > "$MCP_REFERENCE_FILE"
+  warn "Merge script unavailable. Cannot update existing $MCP_JSON."
+  echo "  Reference saved to $MCP_REFERENCE_FILE."
+  echo "  Please add the \"aiflare\" entry to $MCP_JSON manually."
 fi
 
 # --- 6. Update .gitignore ---
@@ -174,10 +209,48 @@ else
   info "context-capture directive already exists in CLAUDE.md"
 fi
 
+# --- 9. Post-install verification ---
+echo ""
+info "Verifying installation..."
+
+verify_failed=0
+
+# Verify each skill has SKILL.md
+for skill_dir in "$SKILLS_TARGET"/*/; do
+  [[ -d "$skill_dir" ]] || continue
+  skill_name="$(basename "$skill_dir")"
+  if [[ ! -f "$skill_dir/SKILL.md" ]]; then
+    warn "Skill missing SKILL.md: $skill_name"
+    verify_failed=1
+  fi
+done
+
+# Verify MCP server entry point exists and parses
+if [[ -d "$MCP_TARGET" ]]; then
+  MCP_ENTRY="$MCP_TARGET/dist/index.js"
+  if [[ ! -f "$MCP_ENTRY" ]]; then
+    warn "MCP server entry point missing: $MCP_ENTRY"
+    verify_failed=1
+  elif ! node --check "$MCP_ENTRY" 2>/dev/null; then
+    warn "MCP server entry point failed syntax check: $MCP_ENTRY"
+    verify_failed=1
+  fi
+fi
+
+# Verify .mcp.json is valid JSON
+if [[ -f "$MCP_JSON" ]] && ! node -e "JSON.parse(require('fs').readFileSync('$MCP_JSON','utf8'))" 2>/dev/null; then
+  warn "$MCP_JSON is not valid JSON"
+  verify_failed=1
+fi
+
+if [[ "$verify_failed" -eq 0 ]]; then
+  info "All components verified"
+fi
+
 # --- Done ---
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-info "Installation complete!"
+success "Installation complete!"
 echo ""
 echo "  Next steps:"
 echo "  1. Go to AIFlare project settings → API Key Management and generate an API key"
