@@ -1,4 +1,22 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__aiflare__get_session_summary",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('mcpServers',{}\\), indent=2\\)\\)\")",
+      "Bash(env)",
+      "Bash(find:*)",
+      "mcp__aiflare__save_session_report",
+      "WebSearch",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(node -e ' *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm build *)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -18,8 +36,17 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(*git commit*)",
-            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/aiflare.yml\"; if [ -f \"$CFG\" ] && [ -n \"$SESSION_ID\" ]; then API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); PROMPT_FILE=\"${GIT_ROOT}/.context-capture/.claude-prompts-${SESSION_ID}\"; OFFSET_FILE=\"${GIT_ROOT}/.context-capture/.claude-offset-${SESSION_ID}\"; if [ -f \"$PROMPT_FILE\" ]; then CONTENT=$(cat \"$PROMPT_FILE\" | jq -Rs .); curl -s --connect-timeout 5 -X PUT \"${ENDPOINT}/api/v1/work-sessions/prompt\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d \"{\\\"claudeSessionId\\\":\\\"${SESSION_ID}\\\",\\\"content\\\":${CONTENT}}\" > /dev/null 2>&1; LAST_INDEX=0; if [ -f \"$OFFSET_FILE\" ]; then LAST_INDEX=$(cat \"$OFFSET_FILE\"); fi; TOTAL_LINES=$(wc -l < \"$PROMPT_FILE\" | tr -d ' '); if [ \"$TOTAL_LINES\" -gt \"$LAST_INDEX\" ]; then DELTA=$(tail -n +$((LAST_INDEX + 1)) \"$PROMPT_FILE\"); printf '%s' \"$DELTA\" > \"${GIT_ROOT}/.context-capture/.claude-conversation-delta-${SESSION_ID}\"; fi; printf '%s' \"$TOTAL_LINES\" > \"$OFFSET_FILE\"; fi; fi; if [ -d \"$GIT_ROOT/.claude/skills/context-capture\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"git commit completed. You must invoke the context-capture skill to capture the work context.\"}}'; fi"
+            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/aiflare.yml\"; if [ -f \"$CFG\" ] && [ -n \"$SESSION_ID\" ]; then API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); PROMPT_FILE=\"${GIT_ROOT}/.context-capture/.claude-prompts-${SESSION_ID}\"; OFFSET_FILE=\"${GIT_ROOT}/.context-capture/.claude-offset-${SESSION_ID}\"; if [ -f \"$PROMPT_FILE\" ]; then CONTENT=$(cat \"$PROMPT_FILE\" | jq -Rs .); curl -s --connect-timeout 5 -X PUT \"${ENDPOINT}/api/v1/work-sessions/prompt\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d \"{\\\"claudeSessionId\\\":\\\"${SESSION_ID}\\\",\\\"content\\\":${CONTENT}}\" > /dev/null 2>&1; LAST_INDEX=0; if [ -f \"$OFFSET_FILE\" ]; then LAST_INDEX=$(cat \"$OFFSET_FILE\"); fi; TOTAL_LINES=$(wc -l < \"$PROMPT_FILE\" | tr -d ' '); if [ \"$TOTAL_LINES\" -gt \"$LAST_INDEX\" ]; then DELTA=$(tail -n +$((LAST_INDEX + 1)) \"$PROMPT_FILE\"); printf '%s' \"$DELTA\" > \"${GIT_ROOT}/.context-capture/.claude-conversation-delta-${SESSION_ID}\"; fi; printf '%s' \"$TOTAL_LINES\" > \"$OFFSET_FILE\"; fi; fi; if [ -d \"$GIT_ROOT/.claude/skills/context-capture\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"git commit completed. You must invoke the context-capture skill to capture the work context.\"}}'; fi",
+            "if": "Bash(*git commit*)"
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -n \"$SESSION_ID\" ]; then mkdir -p \"${GIT_ROOT}/.context-capture\"; touch \"${GIT_ROOT}/.context-capture/.pending-question-${SESSION_ID}\"; fi"
           }
         ]
       }
@@ -52,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -n \"$SESSION_ID\" ]; then rm -f \"${GIT_ROOT}/.context-capture/.claude-prompts-${SESSION_ID}\"; rm -f \"${GIT_ROOT}/.context-capture/.claude-offset-${SESSION_ID}\"; rm -f \"${GIT_ROOT}/.context-capture/.claude-conversation-delta-${SESSION_ID}\"; CFG=\"$GIT_ROOT/aiflare.yml\"; if [ -f \"$CFG\" ]; then API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X DELETE \"${ENDPOINT}/api/v1/work-sessions/${SESSION_ID}\" -H \"X-API-Key: ${API_KEY}\" > /dev/null 2>&1; fi; fi"
+            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -n \"$SESSION_ID\" ]; then rm -f \"${GIT_ROOT}/.context-capture/.claude-prompts-${SESSION_ID}\"; rm -f \"${GIT_ROOT}/.context-capture/.claude-offset-${SESSION_ID}\"; rm -f \"${GIT_ROOT}/.context-capture/.claude-conversation-delta-${SESSION_ID}\"; rm -f \"${GIT_ROOT}/.context-capture/.pending-question-${SESSION_ID}\"; CFG=\"$GIT_ROOT/aiflare.yml\"; if [ -f \"$CFG\" ]; then API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X DELETE \"${ENDPOINT}/api/v1/work-sessions/${SESSION_ID}\" -H \"X-API-Key: ${API_KEY}\" > /dev/null 2>&1; fi; fi"
           }
         ]
       }
@@ -78,12 +105,6 @@
           }
         ]
       }
-    ]
-  },
-  "permissions": {
-    "allow": [
-      "Bash(git add:*)",
-      "Bash(git commit:*)"
     ]
   }
 }

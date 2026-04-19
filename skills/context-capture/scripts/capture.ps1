@@ -72,6 +72,16 @@ if (-not $ConversationSnippet -and $ClaudeSessionId) {
     }
 }
 
+# --- continuation flag: AskUserQuestion 직후 커밋이면 true ---
+$Continuation = $false
+if ($ClaudeSessionId) {
+    $PendingQuestionFile = Join-Path $GitRoot ".context-capture" ".pending-question-$ClaudeSessionId"
+    if (Test-Path $PendingQuestionFile) {
+        $Continuation = $true
+        Remove-Item $PendingQuestionFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # --- Required field validation ---
 if (-not $Title -or -not $Intent -or -not $CommitHash -or -not $ClaudeSessionId -or -not $ChangedFiles -or -not $Tag) {
     Write-Error "Error: -Title, -Intent, -CommitHash, -ClaudeSessionId, -ChangedFiles, -Tag are required."
@@ -93,6 +103,7 @@ $Payload = @{
     changedFiles    = @($ChangedFilesArray)
     tag             = $Tag
     branch          = $Branch
+    continuation    = $Continuation
 }
 
 if ($ConversationSnippet) {

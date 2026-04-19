@@ -79,6 +79,16 @@ if [[ -z "$CONVERSATION_SNIPPET" && -n "$CLAUDE_SESSION_ID" ]]; then
   fi
 fi
 
+# --- continuation flag: AskUserQuestion 직후 커밋이면 true ---
+CONTINUATION="false"
+if [[ -n "$CLAUDE_SESSION_ID" ]]; then
+  PENDING_QUESTION_FILE="${GIT_ROOT}/.context-capture/.pending-question-${CLAUDE_SESSION_ID}"
+  if [[ -f "$PENDING_QUESTION_FILE" ]]; then
+    CONTINUATION="true"
+    rm -f "$PENDING_QUESTION_FILE"
+  fi
+fi
+
 # --- Required field validation ---
 if [[ -z "$TITLE" || -z "$INTENT" || -z "$COMMIT_HASH" || -z "$CLAUDE_SESSION_ID" || -z "$CHANGED_FILES" || -z "$TAG" ]]; then
   echo "Error: --title, --intent, --commit-hash, --claude-session-id, --changed-files, --tag are required." >&2
@@ -141,7 +151,8 @@ cat > "$PAYLOAD_FILE" << PAYLOAD_EOF
   "claudeSessionId": "$(json_escape "$CLAUDE_SESSION_ID")",
   "changedFiles": ${CHANGED_FILES_JSON},
   "tag": "$(json_escape "$TAG")",
-  "branch": "$(json_escape "$BRANCH")"${SNIPPET_FIELD}
+  "branch": "$(json_escape "$BRANCH")",
+  "continuation": ${CONTINUATION}${SNIPPET_FIELD}
 }
 PAYLOAD_EOF
 

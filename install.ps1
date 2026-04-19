@@ -25,30 +25,63 @@ Write-Host ""
 Write-Host "Starting AIFlare installation..."
 Write-Host ""
 
-# --- 1. Install Skill ---
-$SkillDir = ".claude/skills/context-capture"
-if (Test-Path $SkillDir) {
-    Remove-Item $SkillDir -Recurse -Force
-    Write-Warn "Removing existing context-capture Skill and replacing with latest version."
-}
+# --- 1. Clone repository to a temporary location ---
+$TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("aiflare-" + [guid]::NewGuid().ToString("N"))
+$CloneDir = Join-Path $TempDir "repo"
+New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
 
-New-Item -ItemType Directory -Force -Path ".claude/skills" | Out-Null
-$cloneResult = git clone --depth 1 https://github.com/kwo2002/context-bridge.git $SkillDir 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Err "Failed to clone Skill repository. Please check your network connection."
-    if (Test-Path $SkillDir) { Remove-Item $SkillDir -Recurse -Force }
-    exit 1
-}
-Remove-Item (Join-Path $SkillDir ".git") -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item (Join-Path $SkillDir "install.sh") -Force -ErrorAction SilentlyContinue
-Remove-Item (Join-Path $SkillDir "install.ps1") -Force -ErrorAction SilentlyContinue
+try {
+    $cloneResult = git clone --depth 1 https://github.com/kwo2002/context-bridge.git $CloneDir 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "Failed to clone Skill repository. Please check your network connection."
+        exit 1
+    }
+    Remove-Item (Join-Path $CloneDir ".git") -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Info "Skill installed -> $SkillDir"
+    # --- 2. Install all skills ---
+    $SkillsSource = Join-Path $CloneDir "skills"
+    $SkillsTarget = ".claude/skills"
 
-# --- 2. Install settings.local.json (hooks) ---
-$SettingsFile = ".claude/settings.local.json"
+    if (-not (Test-Path $SkillsSource)) {
+        Write-Err "skills/ directory not found in cloned repository."
+        exit 1
+    }
 
-$HooksContent = @'
+    New-Item -ItemType Directory -Force -Path $SkillsTarget | Out-Null
+
+    Get-ChildItem -Path $SkillsSource -Directory | ForEach-Object {
+        $skillName = $_.Name
+        $target = Join-Path $SkillsTarget $skillName
+        if (Test-Path $target) {
+            Remove-Item $target -Recurse -Force
+            Write-Warn "Replaced existing skill: $skillName"
+        }
+        Copy-Item -Path $_.FullName -Destination $target -Recurse -Force
+        Write-Info "Skill installed -> $target"
+    }
+
+    $ContextCaptureDir = Join-Path $SkillsTarget "context-capture"
+
+    # --- 3. Install MCP Server (shared across all skills) ---
+    $McpSource = Join-Path $CloneDir "mcp-server"
+    $McpTarget = ".claude/mcp-server"
+
+    if (Test-Path $McpSource) {
+        if (Test-Path $McpTarget) { Remove-Item $McpTarget -Recurse -Force }
+        Copy-Item -Path $McpSource -Destination $McpTarget -Recurse -Force
+        if (Get-Command npm -ErrorAction SilentlyContinue) {
+            Push-Location $McpTarget
+            try { npm install --production --silent 2>$null } catch {}
+            Pop-Location
+        }
+        Write-Info "MCP Server ready -> $McpTarget"
+    }
+
+    # --- 4. Install settings.local.json (hooks) ---
+    $SettingsFile = ".claude/settings.local.json"
+    New-Item -ItemType Directory -Force -Path ".claude" | Out-Null
+
+    $HooksContent = @'
 {
   "hooks": {
     "SessionStart": [
@@ -134,109 +167,103 @@ $HooksContent = @'
 }
 '@
 
-if (-not (Test-Path $SettingsFile)) {
-    Set-Content -Path $SettingsFile -Value $HooksContent -Encoding UTF8
-    Write-Info "Hooks config created -> $SettingsFile"
-} else {
-    Write-Warn "Existing $SettingsFile found. Please add hooks manually."
-    Write-Host ""
-    Write-Host "  The hooks content to merge is shown above in the script source."
-    Write-Host "  Or re-run this installer after removing the existing file."
-}
+    if (-not (Test-Path $SettingsFile)) {
+        Set-Content -Path $SettingsFile -Value $HooksContent -Encoding UTF8
+        Write-Info "Hooks config created -> $SettingsFile"
+    } else {
+        Write-Warn "Existing $SettingsFile found. Please add hooks manually."
+        Write-Host ""
+        Write-Host "  The hooks content to merge is shown above in the script source."
+        Write-Host "  Or re-run this installer after removing the existing file."
+    }
 
-# --- 2.5. Install MCP Server dependencies ---
-$McpDir = Join-Path $SkillDir "mcp-server"
-if ((Test-Path $McpDir) -and (Get-Command npm -ErrorAction SilentlyContinue)) {
-    Push-Location $McpDir
-    try { npm install --production --silent 2>$null } catch {}
-    Pop-Location
-    Write-Info "MCP Server ready -> $McpDir"
-}
-
-# --- 2.6. Create .mcp.json ---
-$McpJson = ".mcp.json"
-if (-not (Test-Path $McpJson)) {
-    $McpJsonContent = @'
+    # --- 5. Create .mcp.json ---
+    $McpJson = ".mcp.json"
+    if (-not (Test-Path $McpJson)) {
+        $McpJsonContent = @'
 {
   "mcpServers": {
     "aiflare": {
       "command": "node",
-      "args": [".claude/skills/context-capture/mcp-server/dist/index.js"]
+      "args": [".claude/mcp-server/dist/index.js"]
     }
   }
 }
 '@
-    Set-Content -Path $McpJson -Value $McpJsonContent -Encoding UTF8
-    Write-Info "MCP config created -> $McpJson"
-} else {
-    if (-not (Select-String -Path $McpJson -Pattern "aiflare" -Quiet)) {
-        Write-Warn "Existing $McpJson found. Please add aiflare MCP server manually."
+        Set-Content -Path $McpJson -Value $McpJsonContent -Encoding UTF8
+        Write-Info "MCP config created -> $McpJson"
     } else {
-        Write-Info "aiflare already configured in $McpJson"
+        if (-not (Select-String -Path $McpJson -Pattern "aiflare" -Quiet)) {
+            Write-Warn "Existing $McpJson found. Please add aiflare MCP server manually."
+        } else {
+            Write-Info "aiflare already configured in $McpJson"
+        }
     }
-}
 
-# --- 3. Update .gitignore ---
-$GitIgnore = ".gitignore"
-if (-not (Test-Path $GitIgnore)) { New-Item -ItemType File -Path $GitIgnore | Out-Null }
+    # --- 6. Update .gitignore ---
+    $GitIgnore = ".gitignore"
+    if (-not (Test-Path $GitIgnore)) { New-Item -ItemType File -Path $GitIgnore | Out-Null }
 
-$GitIgnoreContent = Get-Content $GitIgnore -Raw -ErrorAction SilentlyContinue
-if (-not $GitIgnoreContent) { $GitIgnoreContent = "" }
+    $GitIgnoreContent = Get-Content $GitIgnore -Raw -ErrorAction SilentlyContinue
+    if (-not $GitIgnoreContent) { $GitIgnoreContent = "" }
 
-$entries = @("aiflare.yml", ".context-capture/", ".claude/settings.local.json")
-foreach ($entry in $entries) {
-    if ($GitIgnoreContent -notmatch [regex]::Escape($entry)) {
-        Add-Content -Path $GitIgnore -Value $entry
-        Write-Info "Added $entry to .gitignore"
-    } else {
-        Write-Info "$entry already in .gitignore"
+    $entries = @("aiflare.yml", ".context-capture/", ".claude/settings.local.json")
+    foreach ($entry in $entries) {
+        if ($GitIgnoreContent -notmatch [regex]::Escape($entry)) {
+            Add-Content -Path $GitIgnore -Value $entry
+            Write-Info "Added $entry to .gitignore"
+        } else {
+            Write-Info "$entry already in .gitignore"
+        }
     }
-}
 
-# --- 4. Install Git hook ---
-$SkillPrePush = Join-Path $SkillDir "scripts/pre-push.ps1"
-$HooksTargetDir = ".git/hooks"
+    # --- 7. Install Git pre-push hook ---
+    $SkillPrePush = Join-Path $ContextCaptureDir "scripts/pre-push.ps1"
+    $HooksTargetDir = ".git/hooks"
 
-if (Test-Path $SkillPrePush) {
-    $PrePushTarget = Join-Path $HooksTargetDir "pre-push"
-    if (Test-Path $PrePushTarget) {
-        Write-Warn "Existing $PrePushTarget found. Will not overwrite."
-        Write-Host "  Please merge manually:"
-        Write-Host "    type $SkillPrePush"
-    } else {
-        # Git for Windows는 Git Bash로 hook을 실행하므로 sh 래퍼 생성
-        $WrapperContent = @"
+    if (Test-Path $SkillPrePush) {
+        $PrePushTarget = Join-Path $HooksTargetDir "pre-push"
+        if (Test-Path $PrePushTarget) {
+            Write-Warn "Existing $PrePushTarget found. Will not overwrite."
+            Write-Host "  Please merge manually:"
+            Write-Host "    type $SkillPrePush"
+        } else {
+            # Git for Windows는 Git Bash로 hook을 실행하므로 sh 래퍼 생성
+            $WrapperContent = @"
 #!/bin/sh
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "`$(git rev-parse --show-toplevel)/.claude/skills/context-capture/scripts/pre-push.ps1"
 "@
-        Set-Content -Path $PrePushTarget -Value $WrapperContent -Encoding UTF8
-        Write-Info "pre-push hook installed -> $PrePushTarget"
+            Set-Content -Path $PrePushTarget -Value $WrapperContent -Encoding UTF8
+            Write-Info "pre-push hook installed -> $PrePushTarget"
+        }
+    } else {
+        Write-Warn "pre-push.ps1 script not found: $SkillPrePush"
     }
-} else {
-    Write-Warn "pre-push.ps1 script not found: $SkillPrePush"
+
+    # --- 8. Update CLAUDE.md ---
+    $ClaudeMd = "CLAUDE.md"
+    $Directive = "After git commit, you must always run the context-capture skill."
+
+    if (-not (Test-Path $ClaudeMd)) {
+        Set-Content -Path $ClaudeMd -Value $Directive -Encoding UTF8
+        Write-Info "CLAUDE.md created with directive"
+    } elseif (-not (Select-String -Path $ClaudeMd -Pattern "context-capture" -Quiet)) {
+        Add-Content -Path $ClaudeMd -Value "`n$Directive"
+        Write-Info "Directive added to CLAUDE.md"
+    } else {
+        Write-Info "context-capture directive already exists in CLAUDE.md"
+    }
+
+    # --- Done ---
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Info "Installation complete!"
+    Write-Host ""
+    Write-Host "  Next steps:"
+    Write-Host "  1. Go to AIFlare project settings -> API Key Management and generate an API key"
+    Write-Host "  2. Place the downloaded aiflare.yml in the project root"
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Cyan
+} finally {
+    if (Test-Path $TempDir) { Remove-Item $TempDir -Recurse -Force -ErrorAction SilentlyContinue }
 }
-
-# --- 5. Update CLAUDE.md ---
-$ClaudeMd = "CLAUDE.md"
-$Directive = "After git commit, you must always run the context-capture skill."
-
-if (-not (Test-Path $ClaudeMd)) {
-    Set-Content -Path $ClaudeMd -Value $Directive -Encoding UTF8
-    Write-Info "CLAUDE.md created with directive"
-} elseif (-not (Select-String -Path $ClaudeMd -Pattern "context-capture" -Quiet)) {
-    Add-Content -Path $ClaudeMd -Value "`n$Directive"
-    Write-Info "Directive added to CLAUDE.md"
-} else {
-    Write-Info "context-capture directive already exists in CLAUDE.md"
-}
-
-# --- Done ---
-Write-Host ""
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Info "Installation complete!"
-Write-Host ""
-Write-Host "  Next steps:"
-Write-Host "  1. Go to AIFlare project settings -> API Key Management and generate an API key"
-Write-Host "  2. Place the downloaded aiflare.yml in the project root"
-Write-Host ""
-Write-Host "========================================" -ForegroundColor Cyan
