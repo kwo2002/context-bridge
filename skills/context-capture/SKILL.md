@@ -251,6 +251,8 @@ PaymentRetryService.kt: Changed retry logic. application.yml: Added settings. Pa
 Pass the data generated in step 3 as arguments to the capture script.
 The script handles config file reading, JSON generation, API calls, and result processing.
 
+> `continuation` 필드는 capture.sh 가 자동으로 세팅한다. 직전에 `AskUserQuestion` tool 이 실행되었다면 `.context-capture/.pending-question-{SESSION_ID}` 플래그 파일이 존재하고, capture.sh 가 이를 감지해 `continuation: true` 를 전송한다. 사용자나 에이전트가 직접 넘길 필요는 없다.
+
 Choose the appropriate script based on the operating system:
 
 **macOS / Linux:**
