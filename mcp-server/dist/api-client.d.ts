@@ -139,6 +139,11 @@ export interface SaveWeeklyDigestReportResult {
     week: string;
     createdAt: string;
 }
+export interface SavePmDigestReportResult {
+    reportId: string;
+    week: string;
+    createdAt: string;
+}
 export interface SessionPromptsData {
     workSessionId: string;
     content: string;
@@ -161,6 +166,7 @@ export declare class ApiClient {
     saveSessionCompareReport(sessionId1: string, sessionId2: string, title: string, content: string): Promise<SaveSessionCompareReportResult>;
     getWeeklyDigest(week: string): Promise<WeeklyDigestData>;
     saveWeeklyDigestReport(week: string, title: string, content: string): Promise<SaveWeeklyDigestReportResult>;
+    savePmDigestReport(week: string, title: string, content: string): Promise<SavePmDigestReportResult>;
     getSessionPrompts(claudeSessionId: string): Promise<SessionPromptsData>;
     savePromptEvaluationReport(claudeSessionId: string, title: string, content: string): Promise<SavePromptEvaluationReportResult>;
 }

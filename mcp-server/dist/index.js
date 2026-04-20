@@ -17,6 +17,8 @@ import { handleGetWeeklyDigest } from "./tools/get-weekly-digest.js";
 import { handleSaveWeeklyDigestReport } from "./tools/save-weekly-digest-report.js";
 import { handleGetSessionPrompts } from "./tools/get-session-prompts.js";
 import { handleSavePromptEvaluationReport } from "./tools/save-prompt-evaluation-report.js";
+import { handleGetPmDigest } from "./tools/get-pm-digest.js";
+import { handleSavePmDigestReport } from "./tools/save-pm-digest-report.js";
 const config = loadConfig();
 /**
  * 세션 ID를 결정한다.
@@ -215,6 +217,43 @@ server.tool("save_weekly_digest_report", "Save a weekly digest report to the AIF
     const apiClient = new ApiClient(config);
     try {
         const text = await handleSaveWeeklyDigestReport(apiClient, { week, title, content });
+        return { content: [{ type: "text", text }] };
+    }
+    catch (e) {
+        return { content: [{ type: "text", text: `보고서 저장에 실패했습니다. 보고서 내용은 위에 출력되어 있으니 참고해주세요.\n\n오류: ${e instanceof Error ? e.message : String(e)}` }] };
+    }
+});
+server.tool("get_pm_digest", "Retrieve the same weekly digest data as get_weekly_digest, but presented as raw input for a PM-oriented report. Same backend endpoint; the difference is the downstream skill rewrites the data in non-technical, business-facing vocabulary.", {
+    week: z.string().describe("ISO 8601 week (e.g., '2026-W15'). If omitted, uses the current week.").optional(),
+}, async ({ week }) => {
+    if (!config) {
+        return {
+            content: [{ type: "text", text: "AIFlare is not configured. Place aiflare.yml in your project root." }],
+        };
+    }
+    const resolvedWeek = week || getCurrentWeek();
+    const apiClient = new ApiClient(config);
+    try {
+        const text = await handleGetPmDigest(apiClient, { week: resolvedWeek });
+        return { content: [{ type: "text", text }] };
+    }
+    catch (e) {
+        return { content: [{ type: "text", text: `Error querying AIFlare: ${e instanceof Error ? e.message : String(e)}` }] };
+    }
+});
+server.tool("save_pm_digest_report", "Save a PM-oriented weekly digest report to the AIFlare server. The report will be viewable on the web dashboard, in a section separate from team weekly digests.", {
+    week: z.string().describe("ISO 8601 week the report covers (e.g., '2026-W15')"),
+    title: z.string().describe("Report title"),
+    content: z.string().describe("Report content in Markdown format"),
+}, async ({ week, title, content }) => {
+    if (!config) {
+        return {
+            content: [{ type: "text", text: "AIFlare is not configured. Place aiflare.yml in your project root." }],
+        };
+    }
+    const apiClient = new ApiClient(config);
+    try {
+        const text = await handleSavePmDigestReport(apiClient, { week, title, content });
         return { content: [{ type: "text", text }] };
     }
     catch (e) {

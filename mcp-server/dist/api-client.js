@@ -190,6 +190,28 @@ export class ApiClient {
             clearTimeout(timeout);
         }
     }
+    async savePmDigestReport(week, title, content) {
+        const url = `${this.endpoint}/api/v1/insights/pm-digest-reports`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        try {
+            const res = await fetch(url, {
+                method: "POST",
+                headers: { "X-API-Key": this.apiKey, "Content-Type": "application/json", "Accept": "application/json" },
+                body: JSON.stringify({ week, title, content }),
+                signal: controller.signal,
+            });
+            const body = await res.json();
+            if (!body.success)
+                throw new Error(body.error?.message ?? `HTTP ${res.status}`);
+            if (!body.response)
+                throw new Error("보고서 저장에 실패했습니다");
+            return body.response;
+        }
+        finally {
+            clearTimeout(timeout);
+        }
+    }
     async getSessionPrompts(claudeSessionId) {
         const url = `${this.endpoint}/api/v1/sessions/${encodeURIComponent(claudeSessionId)}/prompts`;
         const controller = new AbortController();
