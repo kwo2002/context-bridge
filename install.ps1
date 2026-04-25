@@ -230,7 +230,7 @@ try {
             Write-Host "  Please merge manually:"
             Write-Host "    type $SkillPrePush"
         } else {
-            # Git for Windows는 Git Bash로 hook을 실행하므로 bash 스크립트를 그대로 복사
+            # Git for Windows runs hooks via Git Bash, so copy the bash script as-is
             Copy-Item -Path $SkillPrePush -Destination $PrePushTarget -Force
             Write-Info "pre-push hook installed -> $PrePushTarget"
         }
