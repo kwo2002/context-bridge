@@ -117,6 +117,14 @@ try {
         Write-Warn "Hook scripts source not found: $HooksDirSource"
     }
 
+    # --- 3.6. Remove Unix-only scripts (.sh) — ps1 installer doesn't need them ---
+    foreach ($dir in @($HooksDirTarget, (Join-Path $ContextCaptureDir "scripts"))) {
+        if (Test-Path $dir) {
+            Get-ChildItem -Path $dir -Filter "*.sh" -File -ErrorAction SilentlyContinue |
+                Remove-Item -Force
+        }
+    }
+
     # --- 4. Install settings.local.json (hooks) ---
     $SettingsFile = ".claude/settings.local.json"
     New-Item -ItemType Directory -Force -Path ".claude" | Out-Null

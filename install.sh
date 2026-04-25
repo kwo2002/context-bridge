@@ -119,6 +119,12 @@ else
   warn "Hook scripts source not found: $HOOKS_DIR_SOURCE"
 fi
 
+# --- 3.6. Remove Windows-only scripts (.ps1) — sh installer doesn't need them ---
+for dir in "$HOOKS_DIR_TARGET" "$CONTEXT_CAPTURE_DIR/scripts"; do
+  [[ -d "$dir" ]] || continue
+  find "$dir" -maxdepth 1 -type f -name "*.ps1" -delete 2>/dev/null || true
+done
+
 # --- 4. Install settings.local.json (hooks) ---
 SETTINGS_FILE=".claude/settings.local.json"
 HOOKS_SOURCE="$CLONE_DIR/aiflare_settings.json"
