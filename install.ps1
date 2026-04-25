@@ -306,11 +306,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "`$(git rev-parse --show
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Success "Installation complete!"
-    Write-Host ""
-    Write-Host "  Next steps:"
-    Write-Host "  1. Go to AIFlare project settings -> API Key Management and generate an API key"
-    Write-Host "  2. Place the downloaded aiflare.yml in the project root"
-    Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
 } finally {
     if (Test-Path $TempDir) { Remove-Item $TempDir -Recurse -Force -ErrorAction SilentlyContinue }
