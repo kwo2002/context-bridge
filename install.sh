@@ -138,7 +138,7 @@ if [[ ! -f "$HOOKS_SOURCE" ]]; then
 elif [[ ! -f "$SETTINGS_FILE" ]]; then
   cp "$HOOKS_SOURCE" "$SETTINGS_FILE"
   info "Hooks config created → $SETTINGS_FILE"
-elif command -v node &>/dev/null && [[ -f "$d" ]]; then
+elif command -v node &>/dev/null && [[ -f "$MERGE_SCRIPT" ]]; then
   cp "$SETTINGS_FILE" "$SETTINGS_FILE.bak"
   if node "$MERGE_SCRIPT" "$SETTINGS_FILE" "$HOOKS_SOURCE"; then
     info "Hooks merged → $SETTINGS_FILE (backup: $SETTINGS_FILE.bak)"
