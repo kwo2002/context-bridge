@@ -1,6 +1,6 @@
-# Claude Code hook PowerShell 공용 라이브러리. dot-source 전용.
-# 사용: . "$PSScriptRoot\_common.ps1"
-# 호출 후 set 되는 변수: $script:INPUT_RAW, $script:SESSION_ID
+# Claude Code hook PowerShell common library. Dot-source only.
+# Usage: . "$PSScriptRoot\_common.ps1"
+# Variables set after call: $script:INPUT_RAW, $script:SESSION_ID
 
 function Read-HookInput {
     $script:INPUT_RAW = [Console]::In.ReadToEnd()

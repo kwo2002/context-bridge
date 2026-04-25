@@ -16,7 +16,7 @@ function Send-PromptFile {
             -Body $body `
             -TimeoutSec 5 | Out-Null
     } catch {
-        Write-LogWarn "프롬프트 업로드 실패"
+        Write-LogWarn "prompt upload failed"
     }
 }
 

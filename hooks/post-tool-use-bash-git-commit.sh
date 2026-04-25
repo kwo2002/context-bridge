@@ -14,7 +14,7 @@ upload_prompt_file() {
     -H 'Content-Type: application/json' \
     -H "X-API-Key: ${AIFLARE_API_KEY}" \
     -d "$payload" > /dev/null \
-    || log_warn "프롬프트 업로드 실패"
+    || log_warn "prompt upload failed"
 }
 
 update_delta() {

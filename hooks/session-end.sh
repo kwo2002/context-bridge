@@ -6,7 +6,7 @@ source "$(dirname "$0")/_common.sh"
 read_input || exit 0
 git_root=$(get_git_root) || git_root=$(pwd)
 
-# 세션 종료 시 .context-capture/ 의 4 종 파일 cleanup. 없어도 무해.
+# Clean up the 4 files in .context-capture/ on session end. No-op if files don't exist.
 rm -f "$(prompt_file_path        "$SESSION_ID" "$git_root")"
 rm -f "$(offset_file_path        "$SESSION_ID" "$git_root")"
 rm -f "$(delta_file_path         "$SESSION_ID" "$git_root")"

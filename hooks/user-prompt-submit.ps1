@@ -12,7 +12,7 @@ if ([string]::IsNullOrEmpty($gitRoot)) { $gitRoot = (Get-Location).Path }
 New-ContextDir -GitRoot $gitRoot
 $promptFile = Get-PromptFilePath -SessionId $script:SESSION_ID -GitRoot $gitRoot
 
-# bash 측 jq -Rs . 와 byte-for-byte 동등: ConvertTo-Json -Compress 가 string 을 quoted JSON 으로 직렬화
+# Equivalent to bash 'jq -Rs .' byte-for-byte: ConvertTo-Json -Compress serializes the string as quoted JSON
 $contentJson = $prompt | ConvertTo-Json -Compress
 $line = '{"role":"user","content":' + $contentJson + '}'
 Add-Content -LiteralPath $promptFile -Value $line
