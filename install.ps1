@@ -49,27 +49,6 @@ if (-not (Test-Path $YmlPath)) {
     exit 1
 }
 
-# --- 0.5. Parse aiflare.yml: api_key (required) + endpoint (default fallback) ---
-$YmlApiKey = ""
-$YmlEndpoint = ""
-foreach ($l in Get-Content $YmlPath) {
-    if ($l -match '^api_key:\s*(.+)') { $YmlApiKey = $Matches[1].Trim().Trim('"').Trim("'") }
-    if ($l -match '^endpoint:\s*(.+)') { $YmlEndpoint = $Matches[1].Trim().Trim('"').Trim("'") }
-}
-
-if (-not $YmlApiKey) {
-    Write-Err "aiflare.yml is missing 'api_key:' value."
-    Write-Host "  Re-download aiflare.yml from https://aiflare.dev project settings."
-    exit 1
-}
-
-if (-not $YmlEndpoint) {
-    $YmlEndpoint = "https://api.aiflare.dev"
-    Write-Info "endpoint not set in aiflare.yml; using default: $YmlEndpoint"
-}
-
-Write-Info "Credentials loaded from aiflare.yml (endpoint: $YmlEndpoint)"
-
 Write-Host ""
 Write-Host "Starting AIFlare installation..."
 Write-Host ""
@@ -126,25 +105,28 @@ try {
         Write-Info "MCP Server ready -> $McpTarget"
     }
 
-    # --- 4. Install settings.local.json (hooks) ---
-    $SettingsFile = ".claude/settings.local.json"
-    $HooksSource = Join-Path $CloneDir "aiflare_settings.json"
-    $MergeScript = Join-Path $CloneDir "scripts/merge-hooks.js"
-    $ReferenceFile = ".claude/aiflare_settings.reference.json"
+    # --- 3.5. Install hook scripts (sh + ps1 mirror) ---
+    $HooksDirSource = Join-Path $CloneDir "hooks"
+    $HooksDirTarget = ".claude/hooks"
 
-    New-Item -ItemType Directory -Force -Path ".claude" | Out-Null
-
-    # --- 4.0. Render placeholders in hook template (HTTP hooks need url baked in) ---
-    $RenderedHooksSource = Join-Path $TempDir "aiflare_settings.rendered.json"
-    if (Test-Path $HooksSource) {
-        $TemplateContent = Get-Content $HooksSource -Raw
-        $TemplateContent = $TemplateContent.Replace('__AIFLARE_ENDPOINT__', $YmlEndpoint).Replace('__AIFLARE_API_KEY__', $YmlApiKey)
-        Set-Content -Path $RenderedHooksSource -Value $TemplateContent -Encoding UTF8
-        $HooksSource = $RenderedHooksSource
+    if (Test-Path $HooksDirSource) {
+        if (Test-Path $HooksDirTarget) { Remove-Item $HooksDirTarget -Recurse -Force }
+        Copy-Item -Path $HooksDirSource -Destination $HooksDirTarget -Recurse -Force
+        Write-Info "Hook scripts installed -> $HooksDirTarget"
+    } else {
+        Write-Warn "Hook scripts source not found: $HooksDirSource"
     }
 
+    # --- 4. Install settings.local.json (hooks) ---
+    $SettingsFile = ".claude/settings.local.json"
+    New-Item -ItemType Directory -Force -Path ".claude" | Out-Null
+
+    $HooksSource = Join-Path $CloneDir "aiflare_settings.windows.json"
+    $ReferenceFile = ".claude/aiflare_settings.reference.json"
+    $MergeScript = Join-Path $CloneDir "scripts/merge-hooks.js"
+
     if (-not (Test-Path $HooksSource)) {
-        Write-Warn "Hooks source file not found in repository: aiflare_settings.json"
+        Write-Warn "Hooks source file not found in repository: aiflare_settings.windows.json"
     } elseif (-not (Test-Path $SettingsFile)) {
         Copy-Item -Path $HooksSource -Destination $SettingsFile -Force
         Write-Info "Hooks config created -> $SettingsFile"
@@ -168,41 +150,6 @@ try {
         Write-Warn "node not found. Cannot auto-merge hooks into existing $SettingsFile."
         Write-Host "  Reference saved to $ReferenceFile."
         Write-Host "  Please merge its `"hooks`" section into $SettingsFile manually."
-    }
-
-    # --- 4.5. Inject credentials into settings.local.json "env" (single source: aiflare.yml) ---
-    if ((Test-Path $SettingsFile) -and (Get-Command node -ErrorAction SilentlyContinue)) {
-        Copy-Item -Path $SettingsFile -Destination "$SettingsFile.bak.env" -Force -ErrorAction SilentlyContinue
-        $env:AIFLARE_API_KEY_IN = $YmlApiKey
-        $env:AIFLARE_ENDPOINT_IN = $YmlEndpoint
-        $NodeScript = @"
-const fs = require('fs');
-const [, , p] = process.argv;
-const s = JSON.parse(fs.readFileSync(p, 'utf8'));
-s.env = s.env || {};
-s.env.AIFLARE_API_KEY  = process.env.AIFLARE_API_KEY_IN;
-s.env.AIFLARE_ENDPOINT = process.env.AIFLARE_ENDPOINT_IN;
-fs.writeFileSync(p, JSON.stringify(s, null, 2) + '\n');
-"@
-        $envInjectFailed = $false
-        try {
-            $NodeScript | node - $SettingsFile
-            if ($LASTEXITCODE -ne 0) {
-                throw "node env injection exited with code $LASTEXITCODE"
-            }
-            Remove-Item "$SettingsFile.bak.env" -Force -ErrorAction SilentlyContinue
-            Write-Info "Credentials injected into $SettingsFile"
-        } catch {
-            if (Test-Path "$SettingsFile.bak.env") {
-                Move-Item -Path "$SettingsFile.bak.env" -Destination $SettingsFile -Force
-            }
-            Write-Err "Credential injection failed. Original $SettingsFile restored."
-            $envInjectFailed = $true
-        } finally {
-            Remove-Item Env:AIFLARE_API_KEY_IN -ErrorAction SilentlyContinue
-            Remove-Item Env:AIFLARE_ENDPOINT_IN -ErrorAction SilentlyContinue
-        }
-        if ($envInjectFailed) { exit 1 }
     }
 
     # --- 5. Install/merge .mcp.json ---
@@ -352,9 +299,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "`$(git rev-parse --show
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Success "Installation complete!"
     Write-Host ""
-    Write-Host "  AIFlare is ready to use:"
-    Write-Host "  - Hooks installed and credentials injected into $SettingsFile"
-    Write-Host "  - Try starting Claude Code in this project to verify hook calls"
+    Write-Host "  Next steps:"
+    Write-Host "  1. Go to AIFlare project settings -> API Key Management and generate an API key"
+    Write-Host "  2. Place the downloaded aiflare.yml in the project root"
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
 } finally {

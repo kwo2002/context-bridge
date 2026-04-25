@@ -1,0 +1,83 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; if(-not $SID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; if(-not $AK){exit 0}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions\\\" -Method Post -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{claudeSessionId=$SID;agentType='CLAUDE_CODE'}|ConvertTo-Json -Compress) -TimeoutSec 5|Out-Null}catch{}; exit 0\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(*git commit*)",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& \\\"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\post-tool-use-bash-git-commit.ps1\\\"\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& \\\"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\user-prompt-submit.ps1\\\"\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& \\\"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\stop.ps1\\\"\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; $GR=git rev-parse --show-toplevel 2>$null; if(-not $GR){$GR=Get-Location}; if($SID){ Remove-Item (Join-Path $GR '.context-capture' \\\".claude-prompts-$SID\\\") -Force -EA SilentlyContinue; Remove-Item (Join-Path $GR '.context-capture' \\\".claude-offset-$SID\\\") -Force -EA SilentlyContinue; Remove-Item (Join-Path $GR '.context-capture' \\\".claude-conversation-delta-$SID\\\") -Force -EA SilentlyContinue; $CFG=Join-Path $GR 'aiflare.yml'; if(Test-Path $CFG){ $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions/$SID\\\" -Method Delete -Headers @{'X-API-Key'=$AK}}catch{}}}\""
+          }
+        ]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $TID=$J.task_id; $TTitle=$J.task_subject; $TDesc=$J.task_description; $SID=$J.session_id; if(-not $TID -or -not $SID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/captures/tasks\\\" -Method Post -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{externalTaskId=$TID;claudeSessionId=$SID;title=$TTitle;description=$TDesc}|ConvertTo-Json -Compress)}catch{}; exit 0\""
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $TID=$J.task_id; if(-not $TID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/captures/tasks/$TID\\\" -Method Patch -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body '{\\\"status\\\":\\\"COMPLETED\\\"}'}catch{}; exit 0\""
+          }
+        ]
+      }
+    ]
+  }
+}

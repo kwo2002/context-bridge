@@ -18,7 +18,7 @@ const AIFLARE_SIGNATURES = [
   '.context-capture',
   'api/v1/work-sessions',
   'api/v1/captures',
-  'api.aiflare.dev',
+  '.claude/hooks/'
 ];
 
 function containsAiflareSignature(value) {
