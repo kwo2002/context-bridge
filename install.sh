@@ -107,7 +107,7 @@ if [[ -d "$MCP_SOURCE" ]]; then
 fi
 
 # --- 3.5. Install hook scripts (sh + ps1 mirror) ---
-HOOKS_DIR_SOURCE="$CLONE_DIR/hooks"
+HOOKS_DIR_SOURCE="$CLONE_DIR/hooks/unix"
 HOOKS_DIR_TARGET=".claude/hooks"
 
 if [[ -d "$HOOKS_DIR_SOURCE" ]]; then
@@ -209,7 +209,7 @@ add_gitignore '.context-capture/'
 add_gitignore '.claude/settings.local.json'
 
 # --- 7. Install Git pre-push hook ---
-PREPUSH_SOURCE="$CONTEXT_CAPTURE_DIR/scripts/pre-push"
+PREPUSH_SOURCE="$CLONE_DIR/scripts/githooks/pre-push"
 HOOKS_TARGET_DIR=".git/hooks"
 
 if [[ -f "$PREPUSH_SOURCE" ]]; then

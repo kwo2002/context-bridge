@@ -106,7 +106,7 @@ try {
     }
 
     # --- 3.5. Install hook scripts (sh + ps1 mirror) ---
-    $HooksDirSource = Join-Path $CloneDir "hooks"
+    $HooksDirSource = Join-Path $CloneDir "hooks/windows"
     $HooksDirTarget = ".claude/hooks"
 
     if (Test-Path $HooksDirSource) {
@@ -220,7 +220,7 @@ try {
     }
 
     # --- 7. Install Git pre-push hook ---
-    $SkillPrePush = Join-Path $ContextCaptureDir "scripts/pre-push.ps1"
+    $SkillPrePush = Join-Path $CloneDir "scripts/githooks/pre-push"
     $HooksTargetDir = ".git/hooks"
 
     if (Test-Path $SkillPrePush) {
@@ -230,16 +230,12 @@ try {
             Write-Host "  Please merge manually:"
             Write-Host "    type $SkillPrePush"
         } else {
-            # Git for Windows는 Git Bash로 hook을 실행하므로 sh 래퍼 생성
-            $WrapperContent = @"
-#!/bin/sh
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "`$(git rev-parse --show-toplevel)/.claude/skills/context-capture/scripts/pre-push.ps1"
-"@
-            Set-Content -Path $PrePushTarget -Value $WrapperContent -Encoding UTF8
+            # Git for Windows는 Git Bash로 hook을 실행하므로 bash 스크립트를 그대로 복사
+            Copy-Item -Path $SkillPrePush -Destination $PrePushTarget -Force
             Write-Info "pre-push hook installed -> $PrePushTarget"
         }
     } else {
-        Write-Warn "pre-push.ps1 script not found: $SkillPrePush"
+        Write-Warn "pre-push hook script not found: $SkillPrePush"
     }
 
     # --- 8. Update CLAUDE.md ---
