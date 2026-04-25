@@ -202,6 +202,18 @@ function main() {
       info(`Skill installed -> ${target}`);
     }
 
+    // Drop non-Node script variants from each skill (keep *.js, remove *.sh and *.ps1)
+    for (const ent of fs.readdirSync(skillsTarget, { withFileTypes: true })) {
+      if (!ent.isDirectory()) continue;
+      const scriptsDir = path.join(skillsTarget, ent.name, 'scripts');
+      if (!fs.existsSync(scriptsDir)) continue;
+      for (const f of fs.readdirSync(scriptsDir)) {
+        if (f.endsWith('.sh') || f.endsWith('.ps1')) {
+          try { fs.unlinkSync(path.join(scriptsDir, f)); } catch { /* ignore */ }
+        }
+      }
+    }
+
     // MCP server
     const mcpSource = path.join(cloneDir, 'mcp-server');
     const mcpTarget = path.join('.claude', 'mcp-server');

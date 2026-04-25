@@ -251,14 +251,12 @@ PaymentRetryService.kt: Changed retry logic. application.yml: Added settings. Pa
 Pass the data generated in step 3 as arguments to the capture script.
 The script handles config file reading, JSON generation, API calls, and result processing.
 
-> `continuation` 필드는 capture.sh 가 자동으로 세팅한다. 직전에 `AskUserQuestion` tool 이 실행되었다면 `.context-capture/.pending-question-{SESSION_ID}` 플래그 파일이 존재하고, capture.sh 가 이를 감지해 `continuation: true` 를 전송한다. 사용자나 에이전트가 직접 넘길 필요는 없다.
+> `continuation` 필드는 capture.js 가 자동으로 세팅한다. 직전에 `AskUserQuestion` tool 이 실행되었다면 `.context-capture/.pending-question-{SESSION_ID}` 플래그 파일이 존재하고, capture.js 가 이를 감지해 `continuation: true` 를 전송한다. 사용자나 에이전트가 직접 넘길 필요는 없다.
 
-Choose the appropriate script based on the operating system:
-
-**macOS / Linux:**
+Run the capture script (Node.js, cross-platform — requires Node 18+):
 
 ```bash
-bash .claude/skills/context-capture/scripts/capture.sh \
+node .claude/skills/context-capture/scripts/capture.js \
   --title "title here" \
   --intent "intent here" \
   --commit-hash "commitHash here" \
@@ -269,20 +267,6 @@ bash .claude/skills/context-capture/scripts/capture.sh \
   --diff-summary "diffSummary here"
 ```
 
-**Windows (PowerShell):**
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .claude/skills/context-capture/scripts/capture.ps1 `
-  -Title "title here" `
-  -Intent "intent here" `
-  -CommitHash "commitHash here" `
-  -AgentType "CLAUDE_CODE" `
-  -ChangedFiles "file1.kt,file2.kt" `
-  -Tag "tag here (REFACTORING|FEATURE|BUGFIX|TEST|DOCS)" `
-  -Alternatives "alternatives here" `
-  -DiffSummary "diffSummary here"
-```
-
 If capture fails, never interrupt the current workflow. Only output a warning and continue with the original work.
 
 ## Subagent Commit Handling
@@ -290,14 +274,12 @@ If capture fails, never interrupt the current workflow. Only output a warning an
 Subagents (agents created via the Agent tool) do not have access to the Skill tool.
 Therefore, when a subagent performs a git commit, include capture script execution instructions in the prompt.
 
-When delegating work to a subagent, append the following instructions at the end of the prompt.
-
-**macOS / Linux:**
+When delegating work to a subagent, append the following instructions at the end of the prompt (cross-platform; the subagent's shell needs to support `$(...)` command substitution — Claude Code's default bash shell handles this on all OSes):
 
 ```
 After completing git commit, you MUST run the following script:
 
-bash .claude/skills/context-capture/scripts/capture.sh \
+node .claude/skills/context-capture/scripts/capture.js \
   --title "Work title (under 50 characters)" \
   --intent "Why this work was done (2-5 sentences)" \
   --commit-hash "$(git rev-parse HEAD)" \
@@ -306,24 +288,6 @@ bash .claude/skills/context-capture/scripts/capture.sh \
   --tag "One of REFACTORING|FEATURE|BUGFIX|TEST|DOCS" \
   --alternatives "Alternatives considered (empty string if none)" \
   --diff-summary "Summary of key changes"
-
-Continue working even if the script fails.
-```
-
-**Windows (PowerShell):**
-
-```
-After completing git commit, you MUST run the following script:
-
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .claude/skills/context-capture/scripts/capture.ps1 `
-  -Title "Work title (under 50 characters)" `
-  -Intent "Why this work was done (2-5 sentences)" `
-  -CommitHash (git rev-parse HEAD) `
-  -AgentType "CLAUDE_CODE" `
-  -ChangedFiles ((git diff --name-only HEAD~1 HEAD) -join ',') `
-  -Tag "One of REFACTORING|FEATURE|BUGFIX|TEST|DOCS" `
-  -Alternatives "Alternatives considered (empty string if none)" `
-  -DiffSummary "Summary of key changes"
 
 Continue working even if the script fails.
 ```
