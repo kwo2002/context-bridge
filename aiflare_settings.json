@@ -1,21 +1,7 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "mcp__aiflare__get_session_summary",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('mcpServers',{}\\), indent=2\\)\\)\")",
-      "Bash(env)",
-      "Bash(find:*)",
-      "mcp__aiflare__save_session_report",
-      "WebSearch",
-      "WebFetch(domain:www.npmjs.com)",
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(node -e ' *)",
-      "Bash(pnpm lint *)",
-      "Bash(pnpm build *)"
-    ]
+  "env": {
+    "AIFLARE_API_KEY": "__AIFLARE_API_KEY__",
+    "AIFLARE_ENDPOINT": "__AIFLARE_ENDPOINT__"
   },
   "hooks": {
     "SessionStart": [
@@ -23,8 +9,12 @@
         "matcher": "startup",
         "hooks": [
           {
-            "type": "command",
-            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); if [ -z \"$SESSION_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/aiflare.yml\"; if [ ! -f \"$CFG\" ]; then exit 0; fi; API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X POST \"${ENDPOINT}/api/v1/work-sessions\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d \"{\\\"claudeSessionId\\\":\\\"${SESSION_ID}\\\",\\\"agentType\\\":\\\"CLAUDE_CODE\\\"}\" > /dev/null 2>&1; exit 0",
+            "type": "http",
+            "url": "__AIFLARE_ENDPOINT__/api/v1/hooks/claude-code/session-start",
+            "headers": {
+              "X-API-Key": "${AIFLARE_API_KEY}"
+            },
+            "allowedEnvVars": ["AIFLARE_API_KEY"],
             "timeout": 10
           }
         ]
@@ -78,8 +68,17 @@
       {
         "hooks": [
           {
+            "type": "http",
+            "url": "__AIFLARE_ENDPOINT__/api/v1/hooks/claude-code/session-end",
+            "headers": {
+              "X-API-Key": "${AIFLARE_API_KEY}"
+            },
+            "allowedEnvVars": ["AIFLARE_API_KEY"],
+            "timeout": 10
+          },
+          {
             "type": "command",
-            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -n \"$SESSION_ID\" ]; then rm -f \"${GIT_ROOT}/.context-capture/.claude-prompts-${SESSION_ID}\"; rm -f \"${GIT_ROOT}/.context-capture/.claude-offset-${SESSION_ID}\"; rm -f \"${GIT_ROOT}/.context-capture/.claude-conversation-delta-${SESSION_ID}\"; rm -f \"${GIT_ROOT}/.context-capture/.pending-question-${SESSION_ID}\"; CFG=\"$GIT_ROOT/aiflare.yml\"; if [ -f \"$CFG\" ]; then API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X DELETE \"${ENDPOINT}/api/v1/work-sessions/${SESSION_ID}\" -H \"X-API-Key: ${API_KEY}\" > /dev/null 2>&1; fi; fi"
+            "command": "INPUT=$(cat); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -n \"$SESSION_ID\" ]; then rm -f \"${GIT_ROOT}/.context-capture/.claude-prompts-${SESSION_ID}\" \"${GIT_ROOT}/.context-capture/.claude-offset-${SESSION_ID}\" \"${GIT_ROOT}/.context-capture/.claude-conversation-delta-${SESSION_ID}\" \"${GIT_ROOT}/.context-capture/.pending-question-${SESSION_ID}\"; fi"
           }
         ]
       }
@@ -89,8 +88,13 @@
         "matcher": "",
         "hooks": [
           {
-            "type": "command",
-            "command": "INPUT=$(cat); TASK_ID=$(printf '%s' \"$INPUT\" | jq -r '.task_id // empty'); TASK_TITLE=$(printf '%s' \"$INPUT\" | jq -r '.task_subject // empty'); TASK_DESC=$(printf '%s' \"$INPUT\" | jq -r '.task_description // empty'); SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r '.session_id // empty'); if [ -z \"$TASK_ID\" ] || [ -z \"$SESSION_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/aiflare.yml\"; if [ ! -f \"$CFG\" ]; then exit 0; fi; API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X POST \"${ENDPOINT}/api/v1/captures/tasks\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d \"{\\\"externalTaskId\\\":\\\"${TASK_ID}\\\",\\\"claudeSessionId\\\":\\\"${SESSION_ID}\\\",\\\"title\\\":$(echo \"$TASK_TITLE\" | jq -Rs .),\\\"description\\\":$(echo \"$TASK_DESC\" | jq -Rs .)}\" > /dev/null 2>&1; exit 0"
+            "type": "http",
+            "url": "__AIFLARE_ENDPOINT__/api/v1/hooks/claude-code/tasks/created",
+            "headers": {
+              "X-API-Key": "${AIFLARE_API_KEY}"
+            },
+            "allowedEnvVars": ["AIFLARE_API_KEY"],
+            "timeout": 10
           }
         ]
       }
@@ -100,8 +104,13 @@
         "matcher": "",
         "hooks": [
           {
-            "type": "command",
-            "command": "INPUT=$(cat); TASK_ID=$(printf '%s' \"$INPUT\" | jq -r '.task_id // empty'); if [ -z \"$TASK_ID\" ]; then exit 0; fi; GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); CFG=\"$GIT_ROOT/aiflare.yml\"; if [ ! -f \"$CFG\" ]; then exit 0; fi; API_KEY=$(grep 'api_key:' \"$CFG\" | awk '{print $2}'); ENDPOINT=$(grep 'endpoint:' \"$CFG\" | awk '{print $2}'); curl -s --connect-timeout 5 -X PATCH \"${ENDPOINT}/api/v1/captures/tasks/${TASK_ID}\" -H 'Content-Type: application/json' -H \"X-API-Key: ${API_KEY}\" -d '{\"status\":\"COMPLETED\"}' > /dev/null 2>&1; exit 0"
+            "type": "http",
+            "url": "__AIFLARE_ENDPOINT__/api/v1/hooks/claude-code/tasks/completed",
+            "headers": {
+              "X-API-Key": "${AIFLARE_API_KEY}"
+            },
+            "allowedEnvVars": ["AIFLARE_API_KEY"],
+            "timeout": 10
           }
         ]
       }

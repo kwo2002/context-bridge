@@ -40,6 +40,36 @@ if [[ -z "$GIT_ROOT" ]]; then
 fi
 
 cd "$GIT_ROOT"
+
+# --- 0. Enforce aiflare.yml presence (must be downloaded before install) ---
+if [[ ! -f "$GIT_ROOT/aiflare.yml" ]]; then
+  error "aiflare.yml not found in project root."
+  echo ""
+  echo "  Setup steps:"
+  echo "    1) Sign up & generate an API key at https://aiflare.dev"
+  echo "    2) Place the downloaded aiflare.yml in $GIT_ROOT"
+  echo "    3) Re-run this installer"
+  echo ""
+  exit 1
+fi
+
+# --- 0.5. Parse aiflare.yml: api_key (required) + endpoint (default fallback) ---
+YML_API_KEY="$(grep -E '^api_key:' "$GIT_ROOT/aiflare.yml" | awk '{print $2}' | tr -d '"'"'"'')"
+YML_ENDPOINT="$(grep -E '^endpoint:' "$GIT_ROOT/aiflare.yml" | awk '{print $2}' | tr -d '"'"'"'')"
+
+if [[ -z "$YML_API_KEY" ]]; then
+  error "aiflare.yml is missing 'api_key:' value."
+  echo "  Re-download aiflare.yml from https://aiflare.dev project settings."
+  exit 1
+fi
+
+if [[ -z "$YML_ENDPOINT" ]]; then
+  YML_ENDPOINT="https://api.aiflare.dev"
+  info "endpoint not set in aiflare.yml; using default: $YML_ENDPOINT"
+fi
+
+info "Credentials loaded from aiflare.yml (endpoint: $YML_ENDPOINT)"
+
 echo ""
 echo "Starting AIFlare installation..."
 echo ""
@@ -101,6 +131,15 @@ REFERENCE_FILE=".claude/aiflare_settings.reference.json"
 
 mkdir -p .claude
 
+# --- 4.0. Render placeholders in hook template (HTTP hooks need url baked in) ---
+RENDERED_HOOKS_SOURCE="$TEMP_DIR/aiflare_settings.rendered.json"
+if [[ -f "$HOOKS_SOURCE" ]]; then
+  sed -e "s|__AIFLARE_ENDPOINT__|${YML_ENDPOINT}|g" \
+      -e "s|__AIFLARE_API_KEY__|${YML_API_KEY}|g" \
+      "$HOOKS_SOURCE" > "$RENDERED_HOOKS_SOURCE"
+  HOOKS_SOURCE="$RENDERED_HOOKS_SOURCE"
+fi
+
 if [[ ! -f "$HOOKS_SOURCE" ]]; then
   warn "Hooks source file not found in repository: aiflare_settings.json"
 elif [[ ! -f "$SETTINGS_FILE" ]]; then
@@ -121,6 +160,31 @@ else
   warn "node not found. Cannot auto-merge hooks into existing $SETTINGS_FILE."
   echo "  Reference saved to $REFERENCE_FILE."
   echo "  Please merge its \"hooks\" section into $SETTINGS_FILE manually."
+fi
+
+# --- 4.5. Inject credentials into settings.local.json "env" (single source: aiflare.yml) ---
+if [[ -f "$SETTINGS_FILE" ]] && command -v node &>/dev/null; then
+  cp "$SETTINGS_FILE" "$SETTINGS_FILE.bak.env" 2>/dev/null || true
+  if AIFLARE_API_KEY_IN="$YML_API_KEY" \
+     AIFLARE_ENDPOINT_IN="$YML_ENDPOINT" \
+     node - "$SETTINGS_FILE" <<'NODE'
+const fs = require('fs');
+const [, , p] = process.argv;
+const s = JSON.parse(fs.readFileSync(p, 'utf8'));
+s.env = s.env || {};
+s.env.AIFLARE_API_KEY  = process.env.AIFLARE_API_KEY_IN;
+s.env.AIFLARE_ENDPOINT = process.env.AIFLARE_ENDPOINT_IN;
+fs.writeFileSync(p, JSON.stringify(s, null, 2) + '\n');
+NODE
+  then
+    chmod 600 "$SETTINGS_FILE"
+    rm -f "$SETTINGS_FILE.bak.env"
+    info "Credentials injected into $SETTINGS_FILE (chmod 600)"
+  else
+    mv "$SETTINGS_FILE.bak.env" "$SETTINGS_FILE"
+    error "Credential injection failed. Original $SETTINGS_FILE restored."
+    exit 1
+  fi
 fi
 
 # --- 5. Install/merge .mcp.json ---

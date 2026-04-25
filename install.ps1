@@ -35,6 +35,41 @@ if (-not $GitRoot) {
 }
 
 Set-Location $GitRoot
+
+# --- 0. Enforce aiflare.yml presence (must be downloaded before install) ---
+$YmlPath = Join-Path $GitRoot "aiflare.yml"
+if (-not (Test-Path $YmlPath)) {
+    Write-Err "aiflare.yml not found in project root."
+    Write-Host ""
+    Write-Host "  Setup steps:"
+    Write-Host "    1) Sign up & generate an API key at https://aiflare.dev"
+    Write-Host "    2) Place the downloaded aiflare.yml in $GitRoot"
+    Write-Host "    3) Re-run this installer"
+    Write-Host ""
+    exit 1
+}
+
+# --- 0.5. Parse aiflare.yml: api_key (required) + endpoint (default fallback) ---
+$YmlApiKey = ""
+$YmlEndpoint = ""
+foreach ($l in Get-Content $YmlPath) {
+    if ($l -match '^api_key:\s*(.+)') { $YmlApiKey = $Matches[1].Trim().Trim('"').Trim("'") }
+    if ($l -match '^endpoint:\s*(.+)') { $YmlEndpoint = $Matches[1].Trim().Trim('"').Trim("'") }
+}
+
+if (-not $YmlApiKey) {
+    Write-Err "aiflare.yml is missing 'api_key:' value."
+    Write-Host "  Re-download aiflare.yml from https://aiflare.dev project settings."
+    exit 1
+}
+
+if (-not $YmlEndpoint) {
+    $YmlEndpoint = "https://api.aiflare.dev"
+    Write-Info "endpoint not set in aiflare.yml; using default: $YmlEndpoint"
+}
+
+Write-Info "Credentials loaded from aiflare.yml (endpoint: $YmlEndpoint)"
+
 Write-Host ""
 Write-Host "Starting AIFlare installation..."
 Write-Host ""
@@ -93,106 +128,30 @@ try {
 
     # --- 4. Install settings.local.json (hooks) ---
     $SettingsFile = ".claude/settings.local.json"
+    $HooksSource = Join-Path $CloneDir "aiflare_settings.json"
+    $MergeScript = Join-Path $CloneDir "scripts/merge-hooks.js"
+    $ReferenceFile = ".claude/aiflare_settings.reference.json"
+
     New-Item -ItemType Directory -Force -Path ".claude" | Out-Null
 
-    $HooksContent = @'
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; if(-not $SID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; if(-not $AK){exit 0}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions\\\" -Method Post -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{claudeSessionId=$SID;agentType='CLAUDE_CODE'}|ConvertTo-Json -Compress) -TimeoutSec 5|Out-Null}catch{}; exit 0\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "if": "Bash(*git commit*)",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(Test-Path $CFG){ $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; $PF=Join-Path $GR '.context-capture' \\\".claude-prompts-$SID\\\"; $OF=Join-Path $GR '.context-capture' \\\".claude-offset-$SID\\\"; if(Test-Path $PF){ $Content=Get-Content $PF -Raw; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions/prompt\\\" -Method Put -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{claudeSessionId=$SID;content=$Content}|ConvertTo-Json -Compress -Depth 5)}catch{}; $LastIndex=0; if(Test-Path $OF){$LastIndex=[int](Get-Content $OF -Raw)}; $Lines=(Get-Content $PF).Count; if($Lines -gt $LastIndex){ $Delta=(Get-Content $PF | Select-Object -Skip $LastIndex) -join \\\"`n\\\"; Set-Content -Path (Join-Path $GR '.context-capture' \\\".claude-conversation-delta-$SID\\\") -Value $Delta}; Set-Content -Path $OF -Value $Lines}}; $SkillCheck=Join-Path $GR '.claude/skills/context-capture'; if(Test-Path $SkillCheck){ Write-Output '{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"git commit completed. You must invoke the context-capture skill to capture the work context.\\\"}}' }\""
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $Prompt=$J.prompt; $SID=$J.session_id; if(-not $SID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; if(-not $GR){$GR=Get-Location}; $Dir=Join-Path $GR '.context-capture'; New-Item -ItemType Directory -Force -Path $Dir|Out-Null; $File=Join-Path $Dir \\\".claude-prompts-$SID\\\"; $Entry=@{role='user';content=$Prompt}|ConvertTo-Json -Compress; Add-Content -Path $File -Value $Entry\""
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $StopActive=$J.stop_hook_active; if($StopActive -eq 'true'){exit 0}; $SID=$J.session_id; $Msg=$J.last_assistant_message; if(-not $SID -or -not $Msg){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; if(-not $GR){$GR=Get-Location}; $Dir=Join-Path $GR '.context-capture'; New-Item -ItemType Directory -Force -Path $Dir|Out-Null; $File=Join-Path $Dir \\\".claude-prompts-$SID\\\"; $Entry=@{role='assistant';content=$Msg}|ConvertTo-Json -Compress; Add-Content -Path $File -Value $Entry\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $SID=$J.session_id; $GR=git rev-parse --show-toplevel 2>$null; if(-not $GR){$GR=Get-Location}; if($SID){ Remove-Item (Join-Path $GR '.context-capture' \\\".claude-prompts-$SID\\\") -Force -EA SilentlyContinue; Remove-Item (Join-Path $GR '.context-capture' \\\".claude-offset-$SID\\\") -Force -EA SilentlyContinue; Remove-Item (Join-Path $GR '.context-capture' \\\".claude-conversation-delta-$SID\\\") -Force -EA SilentlyContinue; $CFG=Join-Path $GR 'aiflare.yml'; if(Test-Path $CFG){ $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/work-sessions/$SID\\\" -Method Delete -Headers @{'X-API-Key'=$AK}}catch{}}}\""
-          }
-        ]
-      }
-    ],
-    "TaskCreated": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $TID=$J.task_id; $TTitle=$J.task_subject; $TDesc=$J.task_description; $SID=$J.session_id; if(-not $TID -or -not $SID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/captures/tasks\\\" -Method Post -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body (@{externalTaskId=$TID;claudeSessionId=$SID;title=$TTitle;description=$TDesc}|ConvertTo-Json -Compress)}catch{}; exit 0\""
-          }
-        ]
-      }
-    ],
-    "TaskCompleted": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='SilentlyContinue'; $J=$input|Out-String|ConvertFrom-Json; $TID=$J.task_id; if(-not $TID){exit 0}; $GR=git rev-parse --show-toplevel 2>$null; $CFG=Join-Path $GR 'aiflare.yml'; if(-not(Test-Path $CFG)){exit 0}; $AK=''; $EP=''; foreach($l in Get-Content $CFG){if($l-match'api_key:\\s*(.+)'){$AK=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")};if($l-match'endpoint:\\s*(.+)'){$EP=$Matches[1].Trim().Trim('\\\"').Trim(\\\"'\\\")}}; if(-not $EP){$EP='https://api.aiflare.dev'}; try{Invoke-RestMethod -Uri \\\"$EP/api/v1/captures/tasks/$TID\\\" -Method Patch -Headers @{'Content-Type'='application/json';'X-API-Key'=$AK} -Body '{\\\"status\\\":\\\"COMPLETED\\\"}'}catch{}; exit 0\""
-          }
-        ]
-      }
-    ]
-  }
-}
-'@
+    # --- 4.0. Render placeholders in hook template (HTTP hooks need url baked in) ---
+    $RenderedHooksSource = Join-Path $TempDir "aiflare_settings.rendered.json"
+    if (Test-Path $HooksSource) {
+        $TemplateContent = Get-Content $HooksSource -Raw
+        $TemplateContent = $TemplateContent.Replace('__AIFLARE_ENDPOINT__', $YmlEndpoint).Replace('__AIFLARE_API_KEY__', $YmlApiKey)
+        Set-Content -Path $RenderedHooksSource -Value $TemplateContent -Encoding UTF8
+        $HooksSource = $RenderedHooksSource
+    }
 
-    $ReferenceFile = ".claude/aiflare_settings.reference.json"
-    $MergeScript = Join-Path $CloneDir "scripts/merge-hooks.js"
-
-    if (-not (Test-Path $SettingsFile)) {
-        Set-Content -Path $SettingsFile -Value $HooksContent -Encoding UTF8
+    if (-not (Test-Path $HooksSource)) {
+        Write-Warn "Hooks source file not found in repository: aiflare_settings.json"
+    } elseif (-not (Test-Path $SettingsFile)) {
+        Copy-Item -Path $HooksSource -Destination $SettingsFile -Force
         Write-Info "Hooks config created -> $SettingsFile"
     } elseif ((Get-Command node -ErrorAction SilentlyContinue) -and (Test-Path $MergeScript)) {
-        $HooksTempFile = Join-Path $TempDir "aiflare_settings.json"
-        Set-Content -Path $HooksTempFile -Value $HooksContent -Encoding UTF8
         Copy-Item -Path $SettingsFile -Destination "$SettingsFile.bak" -Force
         try {
-            node $MergeScript $SettingsFile $HooksTempFile
+            node $MergeScript $SettingsFile $HooksSource
             if ($LASTEXITCODE -eq 0) {
                 Write-Info "Hooks merged -> $SettingsFile (backup: $SettingsFile.bak)"
             } else {
@@ -201,14 +160,49 @@ try {
         } catch {
             Move-Item -Path "$SettingsFile.bak" -Destination $SettingsFile -Force
             Write-Warn "Hook merge failed. Original $SettingsFile restored."
-            Set-Content -Path $ReferenceFile -Value $HooksContent -Encoding UTF8
+            Copy-Item -Path $HooksSource -Destination $ReferenceFile -Force
             Write-Host "  Reference saved to $ReferenceFile for manual merge."
         }
     } else {
-        Set-Content -Path $ReferenceFile -Value $HooksContent -Encoding UTF8
+        Copy-Item -Path $HooksSource -Destination $ReferenceFile -Force
         Write-Warn "node not found. Cannot auto-merge hooks into existing $SettingsFile."
         Write-Host "  Reference saved to $ReferenceFile."
         Write-Host "  Please merge its `"hooks`" section into $SettingsFile manually."
+    }
+
+    # --- 4.5. Inject credentials into settings.local.json "env" (single source: aiflare.yml) ---
+    if ((Test-Path $SettingsFile) -and (Get-Command node -ErrorAction SilentlyContinue)) {
+        Copy-Item -Path $SettingsFile -Destination "$SettingsFile.bak.env" -Force -ErrorAction SilentlyContinue
+        $env:AIFLARE_API_KEY_IN = $YmlApiKey
+        $env:AIFLARE_ENDPOINT_IN = $YmlEndpoint
+        $NodeScript = @"
+const fs = require('fs');
+const [, , p] = process.argv;
+const s = JSON.parse(fs.readFileSync(p, 'utf8'));
+s.env = s.env || {};
+s.env.AIFLARE_API_KEY  = process.env.AIFLARE_API_KEY_IN;
+s.env.AIFLARE_ENDPOINT = process.env.AIFLARE_ENDPOINT_IN;
+fs.writeFileSync(p, JSON.stringify(s, null, 2) + '\n');
+"@
+        $envInjectFailed = $false
+        try {
+            $NodeScript | node - $SettingsFile
+            if ($LASTEXITCODE -ne 0) {
+                throw "node env injection exited with code $LASTEXITCODE"
+            }
+            Remove-Item "$SettingsFile.bak.env" -Force -ErrorAction SilentlyContinue
+            Write-Info "Credentials injected into $SettingsFile"
+        } catch {
+            if (Test-Path "$SettingsFile.bak.env") {
+                Move-Item -Path "$SettingsFile.bak.env" -Destination $SettingsFile -Force
+            }
+            Write-Err "Credential injection failed. Original $SettingsFile restored."
+            $envInjectFailed = $true
+        } finally {
+            Remove-Item Env:AIFLARE_API_KEY_IN -ErrorAction SilentlyContinue
+            Remove-Item Env:AIFLARE_ENDPOINT_IN -ErrorAction SilentlyContinue
+        }
+        if ($envInjectFailed) { exit 1 }
     }
 
     # --- 5. Install/merge .mcp.json ---
@@ -358,9 +352,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "`$(git rev-parse --show
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Success "Installation complete!"
     Write-Host ""
-    Write-Host "  Next steps:"
-    Write-Host "  1. Go to AIFlare project settings -> API Key Management and generate an API key"
-    Write-Host "  2. Place the downloaded aiflare.yml in the project root"
+    Write-Host "  AIFlare is ready to use:"
+    Write-Host "  - Hooks installed and credentials injected into $SettingsFile"
+    Write-Host "  - Try starting Claude Code in this project to verify hook calls"
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
 } finally {
